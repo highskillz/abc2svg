@@ -16,7 +16,6 @@ FROM node:8-stretch
 #   docker run --rm --volume %CD%:/project -it abc2svg bash
 
 RUN \
-  curl -L https://yarnpkg.com/latest.tar.gz | tar xvz && mv dist /yarn && \
   apt-get update && \
   apt-get install --no-install-recommends -y \
     \
@@ -27,8 +26,6 @@ RUN \
   && \
   apt-get remove software-properties-common -y && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
-
-ENV PATH "/yarn/bin:$PATH"
 
 RUN \
   npm i -g \
