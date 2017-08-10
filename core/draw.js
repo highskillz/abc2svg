@@ -3608,12 +3608,12 @@ function draw_systems(indent) {
 			}
 			if (!s2)
 				staves_bar = realwidth;
-			cur_sy = cur_sy.next
+			cur_sy = s.sy
 			for (st = 0; st <= nstaff; st++) {
 				x = xstaff[st]
 				if (x < 0) {		// no staff yet
 					if (cur_sy.st_print[st])
-						xstaff[st] = s.type == BAR ?
+						xstaff[st] = s.ts_next.type == BAR ?
 							s.x : (s.x - s.wl - 2)
 					continue
 				}
