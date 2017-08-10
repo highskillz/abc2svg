@@ -1,23 +1,27 @@
-FROM node:8
+FROM node:8-stretch
 
-# docker build --rm -t abc2svg .
-
+#
+# to build the image, use this:
+#   docker build --rm -t abc2svg .
+#
 # to build an external git folder, use this:
-# docker run --rm -it --volume $(pwd):/project abc2svg
+#   docker run --rm -it --volume $(pwd):/project abc2svg
 #
 # to build the files in the image, use this:
-# docker run --rm -it abc2svg
+#   docker run --rm -it abc2svg
 #
 # to work with whatever is in the image, use this:
-# docker run --rm --volume $(pwd):/project -it abc2svg bash
+#   docker run --rm --volume $(pwd):/project -it abc2svg bash
+
+# fontforge for debian seems to be 
 
 RUN \
   curl -L https://yarnpkg.com/latest.tar.gz | tar xvz && mv dist /yarn && \
-  apt-get update -y && \
+  apt-get update && \
   apt-get install --no-install-recommends -y \
-    software-properties-common \
     \
     less \
+    \
     fontforge \
     ninja-build \
   && \
