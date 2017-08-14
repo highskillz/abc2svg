@@ -997,6 +997,9 @@ function set_transp() {
 	if (curvoice.ckey.k_bagpipe || curvoice.ckey.k_drum)
 		return
 
+	if (cfmt.transp && (curvoice.transp || curvoice.shift))
+		syntax(0, "Mix of old and new transposition syntaxes");
+
 	transp = (cfmt.transp || 0) +		// %%transpose
 		(curvoice.transp || 0) +	// score= / sound=
 		(curvoice.shift || 0);		// shift=
@@ -2303,7 +2306,7 @@ function get_voice(parm) {
 	if (parse.state < 2) {
 		if (a.length != 0)
 			memo_kv_parm(vid, a)
-		if (parse.state == 1)
+		if (vid != '*' && parse.state == 1)
 			new_voice(vid)
 		return
 	}
@@ -2368,11 +2371,6 @@ function goto_tune(is_K) {
 		curvoice = voice_tb[staves_found < 0 ? 0 : par_sy.top_voice]
 	}
 
-	// link the first %%score
-	sym_link(s)
-	if (staves_found < 0)
-		s.default = true
-
 	if (!curvoice.init && !is_K) {
 		set_kv_parm([]);
 		set_transp()
@@ -2408,4 +2406,12 @@ function goto_tune(is_K) {
 		}
 		par_sy.nstaff = nstaff
 	}
+
+	// link the first %%score in the top voice
+	p_voice = curvoice;
+	curvoice = voice_tb[par_sy.top_voice];
+	sym_link(s)
+	if (staves_found < 0)
+		s.default = true;
+	curvoice = p_voice
 }
