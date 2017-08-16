@@ -298,27 +298,6 @@ function sort_all() {
 		}
 		fl = wmin		/* start a new sequence if some width */
 	}
-
-	if (!prev)
-		return
-
-	/* if no bar nor space at end of tune, add some space */
-	if (prev.dur) {
-		p_voice = prev.p_v;
-		p_voice.last_sym = prev;
-		s = sym_add(p_voice, SPACE);
-		s.time = prev.time + prev.dur;
-		s.seqst = true;
-		s.width = 6;
-		prev.ts_next = s;
-		s.ts_prev = prev
-		while (1) {
-			delete prev.eoln
-			if (prev.seqst)
-				break
-			prev = prev.ts_prev
-		}
-	}
 }
 
 // adjust some voice elements
@@ -997,7 +976,7 @@ function set_transp() {
 	if (curvoice.ckey.k_bagpipe || curvoice.ckey.k_drum)
 		return
 
-	if (cfmt.transp && (curvoice.transp || curvoice.shift))
+	if (cfmt.transp && curvoice.transp)	// if %%transpose and score=
 		syntax(0, "Mix of old and new transposition syntaxes");
 
 	transp = (cfmt.transp || 0) +		// %%transpose
@@ -1404,6 +1383,7 @@ function do_pscom(text) {
 			switch (s.type) {
 			case NOTE:		// insert a key
 				s = clone(curvoice.okey);
+				s.k_old_sf = curvoice.ckey.k_sf;
 				sym_link(s)
 				break
 			case KEY:
