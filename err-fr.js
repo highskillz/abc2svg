@@ -6,6 +6,8 @@
 
 user.textrans = {
 	"+: lyric without music": "+: paroles sans musique",
+	"+: symbol line without music":
+			"+: plus de musique pour s:",
 	"+: without previous info field": "Pas de ligne info avant +:",
 	"'{' in grace note": "'{' dans notes d'agrément",
 	"'}', ')' or ']' missing in %%staves":
@@ -47,8 +49,6 @@ user.textrans = {
 	"Bad %%stafflines value": "Valeur incorrecte dans %%stafflines",
 	"Bad %%staffscale value": "Valeur incorrecte dans %%staffscale",
 	"Bad char '$1' in M:": "Mauvais caractère '$1' dans M:",
-	"Bad character '}'": "Caractère '}' mal placé",
-	"Bad character ')'": "Caractère ')' mal placé",
 	"Bad character '$1'": "Mauvais caractère '$1'",
 	"Bad duration '$1' in M:": "Durée '$1' incorrecte dans M:",
 	"Bad integer value": "Mauvaise valeur entière",
@@ -72,6 +72,8 @@ user.textrans = {
 				"'%%fullsvg' ne peut pas être dans un morceau",
 	"Cannot have a bar in grace notes":
 			"Il ne peut pas y avoir de barre dans les notes d'agrément",
+	"Cannot have V:* in tune body":
+			"Il ne peut pas y avoir V:* dans le corps du morceau",
 	"Cannot read file '$1'": "Fichier '$1' inexistant",
 	"Decoration ignored": "Décoration ignorée",
 	"Empty line in tune header - ignored":
@@ -118,6 +120,8 @@ user.textrans = {
 	"Not an ASCII character": "Ce n'est pas un caractère ASCII",
 	"Not enough measure bars for lyric line":
 				"Pas assez de barres pour la ligne de paroles",
+	"Not enough measure bars for symbol line":
+				"Pas assez de barres pour ligne s:",
 	"Not enough measures for %%repeat":
 				"Pas assez de mesures pour %%repeat",
 	"Not enough parameters in %%map":
@@ -126,6 +130,8 @@ user.textrans = {
 				 "Pas assez de notes/silences pour %%repeat",
 	"Note too long": "Durée de note trop longue",
 	"Note too short": "Durée de note trop courte",
+	"s: without music": "s: sans musique",
+	"Too many elements in symbol line": "Trop d'éléments dans ligne s:",
 	"Too many include levels": "Trop de niveaux d'inclusion de fichier",
 	"Too many ties": "Trop de liaisons de prolongation",
 	"Too many words in lyric line": "Trop de mots dans la ligne de paroles",

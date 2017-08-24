@@ -6,6 +6,7 @@
 
 user.textrans = {
 	"+: lyric without music": "+: palavras sem música",
+	"+: symbol line without music": "+: symbol line without music",
 	"+: without previous info field": "+: continuação sem campo anterior",
 	"'{' in grace note": "'{' em notinha ornamental",
 	"'}', ')' or ']' missing in %%staves":
@@ -47,8 +48,6 @@ user.textrans = {
 	"Bad %%stafflines value": "Valor incorreto em %%stafflines",
 	"Bad %%staffscale value": "Valor incorreto em %%staffscale",
 	"Bad char '$1' in M:": "Caractere inválido '$1' em M:",
-	"Bad character '}'": "Caractere '}' fora de lugar",
-	"Bad character ')'": "Caractere ')' fora de lugar",
 	"Bad character '$1'": "Caractere inválido '$1'",
 	"Bad duration '$1' in M:": "Duração '$1' incorreta em M:",
 	"Bad integer value": "Número inteiro incorreto",
@@ -72,6 +71,7 @@ user.textrans = {
 				"'%%fullsvg' não pode estar dentro de uma música",
 	"Cannot have a bar in grace notes":
 			"Não pode haver barra de compasso em grupo de notinhas ornamentais",
+	"Cannot have V:* in tune body": "Cannot have V:* in tune body",
 	"Cannot read file '$1'": "Arquivo '$1' não pôde ser aberto ou não existe",
 	"Decoration ignored": "Decoração ignorada",
 	"Empty line in tune header - ignored":
@@ -119,12 +119,16 @@ user.textrans = {
 	"Not an ASCII character": "Não é um caractere ASCII",
 	"Not enough measure bars for lyric line":
 				"Faltam barras de compasso para linha de palavras",
+	"Not enough measure bars for symbol line":
+				"Not enough measure bars for symbol line",
 	"Not enough measures for %%repeat": "Faltam compassos para %%repeat",
 	"Not enough parameters in %%map":
 				"Parâmetros insuficientes para %%map",
 	"Not enough notes/rests for %%repeat": "Faltam notas/pausas para %%repeat",
 	"Note too long": "Duração muito longa",
 	"Note too short": "Duração muito curta",
+	"s: without music": "s: without music",
+	"Too many elements in symbol line": "Too many elements in symbol line",
 	"Too many include levels": "Excessivos níveis de inclusão de arquivos",
 	"Too many ties": "Excesso de ligaduras de prolongamento",
 	"Too many words in lyric line": "Excesso de palavras",

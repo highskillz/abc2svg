@@ -55,7 +55,7 @@ Z "Transcription: "\n\
 H "History: "',
 	infospace: 0,
 	keywarn: true,
-	leftmargin: 1.7 * CM,
+	leftmargin: 1.4 * CM,
 	lineskipfac: 1.1,
 	linewarn: true,
 	maxshrink: .65,
@@ -79,7 +79,7 @@ H "History: "',
 //		vol: 0
 //	},
 	"print-leftmargin": 0,
-	rightmargin: 1.7 * CM,
+	rightmargin: 1.4 * CM,
 	rbdbstop: true,
 	rbmax: 4,
 	rbmin: 2,
@@ -104,12 +104,12 @@ H "History: "',
 	vocalspace: 10,
 //	voicecombine: 0,
 //	voicescale: 1,
-	writefields: "CMOPQTWw",
+	writefields: "CMOPQsTWw",
 	wordsspace: 5
 }
 
 // exported function: return a parameter value
-this.get_fmt = function(k) {
+Abc.prototype.get_fmt = function(k) {
 	return cfmt[k]
 }
 

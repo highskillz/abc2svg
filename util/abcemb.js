@@ -18,6 +18,11 @@
 // You should have received a copy of the GNU General Public License
 // along with abc2svg.  If not, see <http://www.gnu.org/licenses/>.
 
+window.onerror = function (msg) {
+	alert("window error: msg")
+	return false
+}
+
 var	errtxt = '',
 	new_page = '',
 	abc,
@@ -90,8 +95,19 @@ function playseq(seq) {
 }
 
 // function called when the page is loaded
+var jsdir = document.currentScript.src.match(/.*\//) || ['']
 function dom_loaded() {
 	var page = document.body.innerHTML;
+
+	// if some Postscript definition, load the interpreter
+	if (typeof Psvg != "function"
+	 && page.indexOf("\n%%beginps") > 0) {
+		var scr = document.createElement('script');
+		scr.src = jsdir[0] + "psvg-1.js";
+		scr.onload = dom_loaded;
+		document.head.appendChild(scr)
+		return
+	}
 
 	user.get_abcmodel =
 		function(tsfirst, voice_tb, music_types, info) {
