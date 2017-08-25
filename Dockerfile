@@ -4,16 +4,18 @@ FROM node:8-stretch
 # to build the image, use this:
 #   docker build --rm -t abc2svg .
 #
-# to build an external git folder, use this (Linux+Mac / Windows):
+# to build an external git folder, use this (Linux+Mac / Windows) (Not minifd - for testing):
+#   docker run --rm -it --volume $(pwd):/work abc2svg bash -c "ninja -t clean && NOMIN=1 ninja -v"
+#   docker run --rm -it --volume   %CD%:/work abc2svg bash -c "ninja -t clean && NOMIN=1 ninja -v"
+#
+# to build an external git folder, use this (Linux+Mac / Windows) (minified):
 #   docker run --rm -it --volume $(pwd):/work abc2svg
-#   docker run --rm -it --volume %CD%:/work abc2svg
+#   docker run --rm -it --volume   %CD%:/work abc2svg
 #
-# to build the files in the image, use this:
-#   docker run --rm -it abc2svg
+# to play with the image
+#   docker run --rm -it --volume $(pwd):/work abc2svg bash
+#   docker run --rm -it --volume   %CD%:/work abc2svg bash
 #
-# to work with whatever is in the image, use this (Linux+Mac / Windows):
-#   docker run --rm --volume $(pwd):/project -it abc2svg bash
-#   docker run --rm --volume %CD%:/project -it abc2svg bash
 
 RUN \
   apt-get update && \
@@ -32,8 +34,11 @@ RUN \
     eslint \
     uglify-js
 
-ADD . /work
+#ADD . /work
 
 WORKDIR /work
 
-CMD ninja -v
+CMD \
+  ninja -t clean &&\
+  ninja -v &&\
+  echo Done!
