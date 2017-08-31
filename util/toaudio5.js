@@ -32,7 +32,7 @@
 //	Arguments:
 //		i: start index of the note in the ABC source
 //		on: true on note start, false on note stop
-function Audio5(i_onend, sf, i_onnote) {
+function Audio5(i_onend, sf, i_onnote, i_default_instr) {
 	var	instr_tb = [
 			"acoustic_grand_piano",
 			"bright_acoustic_piano",
@@ -176,6 +176,11 @@ function Audio5(i_onend, sf, i_onnote) {
 		a_e,			// event array
 		onnote = i_onnote,	// callback function on note start/stop
 		follow,			// follow the music
+		default_instr = (
+			i_default_instr
+			? i_default_instr
+			: 0             // default: acoustic grand piano
+		),
 
 	// instruments/notes
 		sfu =			// soundfont default URL
@@ -256,11 +261,17 @@ function Audio5(i_onend, sf, i_onnote) {
 				audio_dcod(a)
 			}
 			req.onerror = function() {
-				alert('Error while loading\n' + url);
-				w_note--;
-				iend = 0
-				if (onend)
-					onend()
+		        if (instr !== default_instr) {
+					// !!!! NOT YET TESTED... think of this as PSEUDO-CODE :)
+					decode_note(default_instr, mi)
+				}
+				else {
+					alert('Error while loading\n' + url);
+					w_note--;
+					iend = 0
+					if (onend)
+						onend()
+				}
 			}
 			req.send()
 		}
@@ -439,6 +450,11 @@ function Audio5(i_onend, sf, i_onnote) {
 	Audio5.prototype.set_follow = function(v) {
 		follow = v
 	} // set_follow()
+
+	// set default instrument
+	Audio5.prototype.set_default_instr = function(v) {
+		default_instr = v
+	} // set_default_instr()
 
 	// Audio5 object creation
 	if (!ac) {

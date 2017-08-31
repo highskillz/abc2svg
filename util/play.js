@@ -19,9 +19,9 @@
 
 // This file is just a wrapper around Audio (toaudio.js) and Audio5 (toaudio5.js)
 
-function AbcPlay(i_onend, sf, i_onnote) {
+function AbcPlay(i_onend, sf, i_onnote, i_default_instr) {
 var	audio = new Audio(),
-	audio5 = new Audio5(i_onend, sf, i_onnote)
+	audio5 = new Audio5(i_onend, sf, i_onnote, i_default_instr)
 
 	return {
 		clear: audio.clear,
@@ -34,6 +34,7 @@ var	audio = new Audio(),
 		set_sft: audio5.set_sft,
 		set_sfu: audio5.set_sfu,
 		set_vol: audio5.set_vol,
-		set_follow: audio5.set_follow
+		set_follow: audio5.set_follow,
+		set_default_instr: audio5.set_default_instr
 	}
 } // AbcPlay
