@@ -34,6 +34,7 @@ var	audio = new Audio(),
 		set_sft: audio5.set_sft,
 		set_sfu: audio5.set_sfu,
 		set_vol: audio5.set_vol,
-		set_follow: audio5.set_follow
+		set_follow: audio5.set_follow,
+		set_speedratio: audio5.set_speedratio
 	}
 } // AbcPlay

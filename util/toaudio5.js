@@ -176,6 +176,8 @@ function Audio5(i_onend, sf, i_onnote) {
 		a_e,			// event array
 		onnote = i_onnote,	// callback function on note start/stop
 		follow,			// follow the music
+		speedratio = 1.0,   // how much faster to play
+		speedfactor = 1.0,  // how much slower to play (internal use only)
 
 	// instruments/notes
 		sfu =			// soundfont default URL
@@ -314,7 +316,7 @@ function Audio5(i_onend, sf, i_onnote) {
 			return
 		}
 //fixme: better, count the number of events?
-		maxt = e[1] + 3			// max time = evt time + 3 seconds
+		maxt = ((e[1] + 3) * speedfactor)			// max time = evt time + 3 seconds
 		do {
 			o = ac.createBufferSource();
 			o.buffer = sounds[e[2]][e[3]];
@@ -325,18 +327,18 @@ function Audio5(i_onend, sf, i_onnote) {
 			o.start(e[1] + stime, 0, e[4])
 
 			if (follow && onnote) {
-				var	st = (e[1] + stime - ac.currentTime) * 1000,
+				var	st = (((e[1] + stime - ac.currentTime) * 1000) *speedfactor),
 					i = e[0];
 				setTimeout(onnote, st, i, true);
-				setTimeout(onnote, st + e[4] * 1000, i, false)
+				setTimeout(onnote, st + ((e[4] * 1000) *speedfactor), i, false)
 			}
 
-			t = e[1];		// event time
+			t = ((e[1]) *speedfactor);		// event time
 			e = a_e[++evt_idx]
 		} while (e && e[1] <= maxt)
 
-		setTimeout(play_next, (t + stime - ac.currentTime)
-				* 1000 - 300)	// wake before end of playing
+		setTimeout(play_next, ((t + stime - ac.currentTime)
+				* 1000 - 300 *speedfactor))	// wake before end of playing
 	} // play_next()
 
 	// wait for all resources, then start playing
@@ -417,6 +419,11 @@ function Audio5(i_onend, sf, i_onnote) {
 		return gain_val
 	} // get_vol()
 
+	// get speedratio
+	Audio5.prototype.get_speedratio = function() {
+		return speedratio;
+	} // get_speedratio()
+	
 	// set soundfont type
 	Audio5.prototype.set_sft = function(v) {
 		sft = v
@@ -434,6 +441,12 @@ function Audio5(i_onend, sf, i_onnote) {
 		else
 			gain_val = v
 	} // set_vol()
+
+	// set 'speed ratio'
+	Audio5.prototype.set_speedratio = function(v) {
+		speedratio = v
+		speedfactor = 1/v		// dividing already to be able to just multiply by the time instead of dividing
+	} // set_speedratio()
 
 	// set 'follow music'
 	Audio5.prototype.set_follow = function(v) {
