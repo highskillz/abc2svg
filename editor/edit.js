@@ -103,20 +103,28 @@ function clean_txt(txt) {
 	})
 }
 
-// load the language files ('edit-lang.js' and 'err-lang.js')
-function relay() { loadtxt() }
-function loadlang(lang) {
-	function loadjs(fn, with_relay) {
-		var s = document.createElement('script');
-		s.src = fn;
-		s.type = 'text/javascript'
-		if (with_relay) {
-			s.onload = relay;
-			s.onreadystatechange = relay
-		}
-		document.head.appendChild(s)
+function loadjs(fn, relay) {
+	var s = document.createElement('script');
+	s.src = fn;
+	s.type = 'text/javascript'
+	if (relay) {
+		s.onload = relay;
+//		s.onreadystatechange = relay
 	}
-	loadjs('edit-' + lang + '.js', true);
+	document.head.appendChild(s)
+}
+
+// keyboard load
+function kbd_show() {
+	if (typeof key != "object")
+		loadjs("abckbd-@MAJOR@.js", function() { kbd_show() })
+	else
+		popshow("abckbd", true)
+}
+
+// load the language files ('edit-lang.js' and 'err-lang.js')
+function loadlang(lang) {
+	loadjs('edit-' + lang + '.js', function() { loadtxt() });
 	loadjs('err-' + lang + '.js')
 }
 
@@ -396,10 +404,12 @@ function seltxt(elt) {
 	if (start == 0
 	 && end == document.getElementById("source").value.length)
 		return				// select all
-	ref.forEach(function(e, o) {
-		if (o >= start && e <= end)
-			colcl.push('_' + o + '_')
-	})
+	if (ref) {
+		ref.forEach(function(e, o) {
+			if (o >= start && e <= end)
+				colcl.push('_' + o + '_')
+		})
+	}
 	if (colcl.length != 0) {
 		colorsel(true);
 		s = document.getElementById("dright");
@@ -458,6 +468,14 @@ function setfont() {
 }
 
 // playing
+// set_speed value = 1..20, 10 = no change
+function set_speed(iv) {
+    var	spv = document.getElementById("spv"),
+	v = Math.pow(3,			// max 3 times lower/faster
+			(iv - 10) * .1);
+	abcplay.set_speed(v);
+	spv.innerHTML = v
+}
 //fixme: do tune/start-stop selection of what to play
 function notehlight(i, on) {
 	var elts = document.getElementsByClassName('_' + i + '_');
@@ -528,7 +546,11 @@ function edit_init() {
 			if (test.canPlayType
 			 && test.canPlayType('audio/mp3') != '')
 				t = {type: "mp3"};
-			abcplay = new AbcPlay(endplay, t, notehlight)
+			abcplay = new AbcPlay({
+					onend: endplay,
+					onnote:notehlight,
+					sft: t
+					});
 //fixme: get soundfont URL/type from cookies (?)
 			e = document.getElementById("playbutton");
 			e.addEventListener("click", play_tune);
@@ -536,6 +558,7 @@ function edit_init() {
 			document.getElementById("playdiv1").style.display =
 				document.getElementById("playdiv2").style.display =
 				document.getElementById("playdiv3").style.display =
+				document.getElementById("playdiv4").style.display =
 					"list-item";
 			document.getElementById("sfu").setAttribute("value",
 				abcplay.get_sfu());

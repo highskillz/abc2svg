@@ -102,7 +102,7 @@ var	BAR = 0,
 	// convert ABC pitch to MIDI index
 	function pit2mid(s, i) {
 		var	n, oct,
-			p = s.notes[i].pit + 12, // pitch from C0
+			p = s.notes[i].pit + 19, // pitch from C-1
 			a = s.notes[i].acc
 
 		if (transp[s.v])
@@ -267,13 +267,15 @@ var	BAR = 0,
 			} else if (s.text && s.text[0] == '1') {
 				rep_en_i = a_e.length;
 				rep_en_t = p_time;
-				bar_map()
+				if (!s.invis)
+					bar_map()
 				for (i = 0; i < 7; i++)
 					rep_en_map[i] = bmap[i]
 				break
 			}
 
-			bar_map()
+			if (!s.invis)
+				bar_map()
 			break
 		case CLEF:
 			transp[s.v] = (!s.clef_octave || s.clef_oct_transp) ?
