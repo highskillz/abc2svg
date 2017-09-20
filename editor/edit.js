@@ -115,9 +115,11 @@ function loadjs(fn, relay) {
 }
 
 // load the language files ('edit-lang.js' and 'err-lang.js')
-function loadlang(lang) {
+function loadlang(lang, no_memo) {
 	loadjs('edit-' + lang + '.js', function() { loadtxt() });
 	loadjs('err-' + lang + '.js')
+	if (!no_memo)
+		set_cookie("lang", lang)
 }
 
 // show/hide a popup message
@@ -452,26 +454,56 @@ function destroyClickedElement(evt) {
 	document.body.removeChild(evt.target)
 }
 
+// cookies stuff
+function set_cookie(n, v) {
+    var	d = new Date();
+	d.setTime(d.getTime() + 30 * 24 * 60 * 60 * 1000);	// one month
+	document.cookie = n + "=" + v + ";expires=" + d.toUTCString()
+}
+
 // set the size of the font of the textarea
 function setfont() {
-	var	i = document.getElementById("fontsize");
-	document.getElementById("source").style.fontSize = i.value.toString() + "px";
-	document.getElementById("src1").style.fontSize = i.value.toString() + "px"
+    var	fs = document.getElementById("fontsize").value.toString();
+	document.getElementById("source").style.fontSize =
+		document.getElementById("src1").style.fontSize = fs + "px";
+	set_cookie("font", fs)
 }
 
 // playing
+// set 'follow music'
+function set_follow(e) {
+    var	v = e.checked;
+	abcplay.set_follow(v);
+	set_cookie("follow", v)
+}
+// set soundfont type
+function set_sft(v) {
+	abcplay.set_sft(v);
+	set_cookie("sft", v)
+}
+// set soundfont URL
+function set_sfu(v) {
+	abcplay.set_sfu(v);
+	set_cookie("sfu", v)
+}
 // set_speed value = 1..20, 10 = no change
 function set_speed(iv) {
-    var	spv = document.getElementById("spv"),
+    var	spvl = document.getElementById("spvl"),
 	v = Math.pow(3,			// max 3 times lower/faster
 			(iv - 10) * .1);
 	abcplay.set_speed(v);
-	spv.innerHTML = v
+	spvl.innerHTML = v;
+	set_cookie("speed", iv)
+}
+// set volume
+function set_vol(v) {
+	abcplay.set_vol(v);
+	set_cookie("volume", v.toFixed(2))
 }
 //fixme: do tune/start-stop selection of what to play
 function notehlight(i, on) {
 	var elts = document.getElementsByClassName('_' + i + '_');
-	if (elts)
+	if (elts && elts[0])
 		elts[0].style.setProperty("fill-opacity", on ? 0.4 : 0)
 }
 function endplay() {
@@ -515,6 +547,55 @@ function edit_init() {
 		setTimeout(edit_init, 500)
 		return
 	}
+
+	function set_pref() {
+	    var	ac = document.cookie.split(';')
+		for (var i = 0; i < ac.length; i++) {
+			var c = ac[i].split('=')
+			switch (c[0].replace(/ */, '')) {
+			case "follow":
+				if (!abcplay) break
+				document.getElementById("fol").checked = c[1];
+				abcplay.set_follow(c[1])
+				break
+			case "font":
+				document.getElementById("source").style.fontSize =
+					document.getElementById("src1").style.fontSize =
+						c[1] + "px";
+				document.getElementById("fontsize").value =
+						Number(c[1])
+				break
+			case "lang":
+				loadlang(c[1], true)
+				break
+			case "sft":
+				if (!abcplay) break
+			    var	t = { js:0, mp3:1, ogg:2 };
+				document.getElementById("sft").selectedIndex =
+						t[c[1]];
+				abcplay.set_sft(c[1])
+				break
+			case "sfu":
+				if (!abcplay) break
+				document.getElementById("sfu").value = c[1];
+				abcplay.set_sfu(c[1])
+				break
+			case "speed":
+				if (!abcplay) break
+				document.getElementById("spv").innerHTML = Number(c[1])
+			    var	v = Math.pow(3, (c[1] - 10) * .1);
+				abcplay.set_speed(v);
+				document.getElementById("spvl").innerHTML = v
+				break
+			case "volume":
+				if (!abcplay) break
+				document.getElementById("gvol").innerHTML = c[1] * 10;
+				abcplay.set_vol(Number(c[1]))
+				break
+			}
+		}
+	}
+
 	document.getElementById("abc2svg").innerHTML =
 		'abc2svg-' + abc2svg.version + ' (' + abc2svg.vdate + ')'
 
@@ -527,24 +608,15 @@ function edit_init() {
 	e.addEventListener("click", function(){selsrc(1)})
 
 	// if playing is possible, load the playing scripts
-	// and set the sound font according to the browser capability
 	if (window.AudioContext || window.webkitAudioContext) {
 		var script = document.createElement('script');
 		script.src = "play-@MAJOR@.js";
 		script.onload = function() {
-			var	e,
-				t = null,
-				test = document.createElement('audio')
-			if (test.canPlayType
-			 && test.canPlayType('audio/mp3') != '')
-				t = {type: "mp3"};
 			abcplay = new AbcPlay({
 					onend: endplay,
 					onnote:notehlight,
-					sft: t
 					});
-//fixme: get soundfont URL/type from cookies (?)
-			e = document.getElementById("playbutton");
+			var e = document.getElementById("playbutton");
 			e.addEventListener("click", play_tune);
 			e.style.display = "inline-block";
 			document.getElementById("playdiv1").style.display =
@@ -552,13 +624,14 @@ function edit_init() {
 				document.getElementById("playdiv3").style.display =
 				document.getElementById("playdiv4").style.display =
 					"list-item";
-			document.getElementById("sfu").setAttribute("value",
-				abcplay.get_sfu());
-//!! soundfont type is either 0:"js" or 1:"mp3" - see edit.xhtml
+			document.getElementById("sfu").value = abcplay.get_sfu();
+			var t = { js:0, mp3:1, ogg:2 };
 			document.getElementById("sft").selectedIndex =
-				abcplay.get_sft() == "js" ? 0 : 1;
+				t[abcplay.get_sft()];
 			document.getElementById("gvol").setAttribute("value",
-				(abcplay.get_vol() * 10) | 0)
+				(abcplay.get_vol() * 10) | 0);
+
+			set_pref()	// set the preferences from the cookies
 		}
 		document.head.appendChild(script);
 
@@ -567,6 +640,8 @@ function edit_init() {
 				if (playing)
 					abcplay.add(tsfirst, voice_tb)
 			}
+	} else {
+		set_pref()	// set the preferences from the cookies
 	}
 }
 

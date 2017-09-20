@@ -21,11 +21,11 @@
 // one argument:
 // @conf: configuration object - all items are optional:
 //	ac: audio context
-// 	sft: soundfont type ("js" or "mp3")
+// 	sft: soundfont type ("js", "mp3" or "ogg")
 //	sfu: soundfont URL
 //		When the type is "js", the URL is the directory containing
 //			the  <instrument>-ogg.js files of midi-js
-//		When the type is "mp3" (I could not find "ogg" files)
+//		When the type is "mp3" or "ogg",
 //			the URL is the directory containing
 //			the <instrument>-<type> directories
 //	onend: callback function called at end of playing
@@ -46,13 +46,13 @@
 //		[0]: index of the note in the ABC source
 //		[1]: time in seconds
 //		[2]: MIDI instrument
-//		[3]: MIDI note pitch
+//		[3]: MIDI note pitch (with cents)
 //		[4]: duration
 //
 // stop() - stop playing
 //
 // get_sft() - get the soundfont type
-// Returns the soundfont type ("js" or "mp3")
+// Returns the soundfont type ("js", "mp3" or "ogg")
 //
 // get_sfu() - get the soundfont URL
 // Returns the URL of the soundfont
@@ -61,7 +61,7 @@
 // Return the volume (range [0..1])
 //
 // set_sft() - set the soundfont type
-// @type: either "js" or "mp3"
+// @type: either "js", "mp3" or "ogg"
 //
 // get_sfu() - set the soundfont URL
 // @url: URL
@@ -76,11 +76,12 @@
 // @follow: boolean
 
 function Audio5(i_conf) {
-	var	instr_tb = [
+	// constants
+	var	instr_tb = [			// index = GM1 instrument - 1
 			"acoustic_grand_piano",
 			"bright_acoustic_piano",
 			"electric_grand_piano",
-			"honky-tonk_piano",
+			"honkytonk_piano",
 			"electric_piano_1",
 			"electric_piano_2",
 			"harpsichord",
@@ -180,7 +181,7 @@ function Audio5(i_conf) {
 			"fx_5_brightness",
 			"fx_6_goblins",
 			"fx_7_echoes",
-			"fx_8_sci-fi",
+			"fx_8_scifi",
 			"sitar",
 			"banjo",
 			"shamisen",
@@ -206,6 +207,26 @@ function Audio5(i_conf) {
 			"applause",
 			"gunshot"],
 
+		// instruments
+		loop = new Uint8Array([		// index = GM1 instrument - 1
+			0, 0, 0, 0, 0, 0, 0, 0,		// 0   Piano
+			0, 0, 0, 0, 0, 0, 0, 0,		// 8   Chromatic Percussion
+			1, 1, 1, 1, 1, 1, 1, 1,		// 16  Organ
+			0, 0, 0, 0, 0, 0, 0, 0,		// 24  Guitar
+			0, 0, 0, 0, 0, 0, 0, 0,		// 32  Bass
+			1, 1, 1, 1, 1, 1, 1, 1,		// 40  Strings
+			1, 1, 0, 0, 0, 0, 0, 0,		// 48  Ensemble
+			1, 1, 1, 1, 1, 1, 1, 1,		// 56  Brass
+			1, 1, 1, 1, 1, 1, 1, 1,		// 64  Reed
+			1, 1, 1, 1, 1, 1, 1, 1,		// 72  Pipe
+			1, 1, 1, 1, 1, 1, 1, 1,		// 80  Synth Lead
+			1, 1, 1, 1, 1, 1, 1, 1,		// 88  Synth Pad
+			1, 1, 1, 1, 1, 1, 1, 1,		// 96  Synth Effects
+			0, 0, 0, 0, 0, 1, 1, 0,		// 104 Ethnic
+			0, 0, 0, 0, 0, 0, 0, 0,		// 112 Percussive
+			0, 0, 0, 0, 0, 0, 0, 0,		// 120 Sound Effects
+		]),
+
 		// note to name and note to octave
 		nn =	["C", "Db", "D",  "Eb", "E",  "F",
 			 "Gb", "G", "Ab", "A",  "Bb", "B"],
@@ -225,10 +246,12 @@ function Audio5(i_conf) {
 
 	// instruments/notes
 		sfu =			// soundfont default URL
-			"https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM",
-		sft = "js",		// soundfont type:
+//			"https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM",
+			"http://moinejf.free.fr/js/FluidR3_GM",
+		sft = "ogg",		// soundfont type:
 					// - "js" midi-js with encoded data structure
 					// - "mp3" midi-js mp3 samples
+					// - "ogg" midi-js ogg samples
 		sounds = [],		// [instr][mi] decoded notes per instrument
 		w_instr = 0,		// number of instruments being loaded
 		note_q = [],		// [instr, note] to be decoded
@@ -257,7 +280,7 @@ function Audio5(i_conf) {
 			return ab
 		} // data2bin()
 
-		function audio_dcod(snd) {
+		function audio_dcod(instr, mi, snd) {
 			ac.decodeAudioData(snd,
 				function(b) {
 					sounds[instr][mi] = b;
@@ -277,31 +300,22 @@ function Audio5(i_conf) {
 		var p = nn[mi % 12] + no[(mi / 12) | 0]
 
 		if (sft == 'js') {
-			audio_dcod(data2bin(MIDI.Soundfont[instr_tb[instr]][p]))
+			audio_dcod(instr, mi,
+				data2bin(MIDI.Soundfont[instr_tb[instr]][p]))
 		} else {
 			var	url = sfu + '/' + instr_tb[instr] + '-' +
 					sft + '/' + p + '.' + sft,
 				req = new XMLHttpRequest();
 
 			req.open('GET', url);
-//// does not work with some browsers
-//			req.responseType = 'arraybuffer';
-//			req.onload = function() {
-//				audio_dcod(this.response)
-//			}
-			req.overrideMimeType(
-				"application/octet-stream; charset=x-user-defined");
+			req.responseType = 'arraybuffer';
 			req.onload = function() {
-				var	l = this.responseText.length,
-					a = new ArrayBuffer(l),
-					b = new Uint8Array(a)
-
-				for (var i = 0; i < l; i++)
-					b[i] = this.responseText.charCodeAt(i) & 0xff;
-				audio_dcod(a)
+				audio_dcod(instr, mi, this.response)
 			}
-			req.onerror = function() {
-				alert('Error while loading\n' + url);
+			req.onerror = function(msg) {
+				if (typeof msg == 'object')
+					msg = msg.type
+				alert("Error '" + msg + "' while loading\n" + url);
 				w_note--;
 				iend = 0;
 				onend()
@@ -337,7 +351,7 @@ function Audio5(i_conf) {
 				sounds[instr] = [];
 				load_instr(instr)
 			}
-			mi = e[3]
+			mi = e[3] | 0
 			if (!sounds[instr][mi]) {	// if no note yet
 				sounds[instr][mi] = true;
 				note_q.push([instr, mi])
@@ -347,7 +361,7 @@ function Audio5(i_conf) {
 
 	// play the next time sequence
 	function play_next() {
-		var	t, e, e2, maxt, o
+		var	t, e, e2, maxt, o, st, d;
 
 		// play the next events
 		e = a_e[evt_idx]
@@ -366,22 +380,32 @@ function Audio5(i_conf) {
 		}
 
 //fixme: better, count the number of events?
-		t = e[1] / speed		// start time
+		t = e[1] / speed;		// start time
 		maxt = t + 3			// max time = evt time + 3 seconds
 		while (1) {
 			o = ac.createBufferSource();
-			o.buffer = sounds[e[2]][e[3]];
+			o.buffer = sounds[e[2]][e[3] | 0];
 			o.connect(gain);
-// if not a percussion instrument,
-//  o.loop = true
-//  o.loopStart = 3 // (for sample 4s)
-			o.start(t + stime, 0, e[4] / speed)
+			if (o.detune) {
+				d = (e[3] * 100) % 100
+				if (d)			// if micro-tone
+					 o.detune.value = d
+			}
+			d = e[4] / speed
+			if (loop[e[2]]) {	// if not a percussion instrument
+				o.loop = true;
+				o.loopStart = 3; // (for sample 4s)
+				o.loopEnd = 10
+			}
+			st = t + stime;			// absolute start time
+			o.start(st);
+			o.stop(st + d)
 
 			if (follow) {
-				var	st = (t + stime - ac.currentTime) * 1000,
-					i = e[0];
+			    var	i = e[0];
+				st = (st - ac.currentTime) * 1000;
 				setTimeout(onnote, st, i, true);
-				setTimeout(onnote, st + e[4] / speed * 1000, i, false)
+				setTimeout(onnote, st + d * 1000, i, false)
 			}
 
 			e = a_e[++evt_idx]

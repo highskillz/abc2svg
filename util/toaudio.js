@@ -47,14 +47,14 @@ var	BAR = 0,
 // add playing events from the ABC model
     ToAudio.prototype.add = function(start,		// starting symbol
 				 voice_tb) {		// voice table
-	var	bmap = new Int8Array(7), // measure base map
-		map = new Int8Array(70), // current map - 10 octaves
+	var	bmap = new Float32Array(7), // measure base map
+		map = new Float32Array(70), // current map - 10 octaves
 		i, n, dt, d,
 		rep_st_s,		// start of sequence to be repeated
 		rep_en_s,		// end
 		rep_nx_s,		// restart at end of repeat
 		rep_st_transp,		// transposition at start of repeat sequence
-		rep_st_map = new Int8Array(70), // accidentals
+		rep_st_map = new Float32Array(70), // accidentals
 		rep_st_fac,		// and play factor
 		transp,			// clef transposition per voice
 		s = start
@@ -80,6 +80,13 @@ var	BAR = 0,
 
 	// define the note map
 	function key_map(s) {
+	    if (s.k_bagpipe) {
+		// detune for just intonation in A (C is C#, F is F# and G is Gnat)
+		bmap = [100-13.7, -2, 2, 100-15.6, -31.2, 0, 3.9]
+		for (var i = 0; i < 7; i++)
+			bmap[i] = (bmap[i] + 150.6) / 100 // 'A' bagpipe = 480Hz
+				// 150.6 = (Math.log2(480/440) - 1)*1200
+	    } else {
 		for (var i = 0; i < 7; i++)
 			bmap[i] = 0
 		switch (s.k_sf) {
@@ -98,19 +105,27 @@ var	BAR = 0,
 		case -2: bmap[2] = -1
 		case -1: bmap[6] = -1; break
 		}
+	    }
 		bar_map()
 	} // key_map()
 
 	// convert ABC pitch to MIDI index
 	function pit2mid(s, i) {
 		var	n, oct,
-			p = s.notes[i].pit + 19, // pitch from C-1
-			a = s.notes[i].acc
+			note = s.notes[i];
+			p = note.pit + 19, // pitch from C-1
+			a = note.acc
 
 		if (transp[s.v])
 			p += transp[s.v]
-		if (a)
-			map[p] = a == 3 ? 0 : a; // (3 = natural)
+		if (a) {
+			if (a == 3)		// (3 = natural)
+				a = 0
+			else if (note.micro_n)
+				a = (a < 0 ? -note.micro_n : note.micro_n) /
+						note.micro_d * 2;
+			map[p] = a
+		}
 		return ((p / 7) | 0) * 12 + scale[p % 7] + map[p]
 	} // pit2mid()
 
@@ -150,7 +165,7 @@ var	BAR = 0,
 			note = s.notes[i]
 			if (note.pit == pit) {
 				d += s.dur / play_factor;
-				note.ti2 = [p, a]
+				note.ti2 = true
 				return note.ti1 ? do_tie(s, note, d) : d
 			}
 		}
@@ -197,13 +212,9 @@ var	BAR = 0,
 	// generate the notes
 	function gen_notes(s, t, d) {
 		for (var i = 0; i <= s.nhd; i++) {
-			var	note = s.notes[i],
-				ti2 = note.ti2		// [p, a]
-			if (ti2) {
-				if (ti2[1])
-					map[ti2[0]] = ti2[1] == 3 ? 0 : ti2[1]
+		    var	note = s.notes[i]
+			if (note.ti2)
 				continue
-			}
 			a_e.push([
 				s.istart,
 				t,
@@ -244,8 +255,11 @@ var	BAR = 0,
 		}
 
 		if (s == rep_en_s) {			// repeat end
-			s = rep_nx_s.ts_next;
+			s = rep_nx_s
+			if (!s.invis)
+				bar_map();
 			abc_time = s.time
+			s = s.ts_next
 			continue
 		}
 
@@ -261,26 +275,30 @@ var	BAR = 0,
 				if (!rep_en_s)		// if no "|1"
 					rep_en_s = s	// repeat end
 				if (rep_st_s) {		// if left repeat
-					s = rep_st_s.ts_next
+					s = rep_st_s
 					for (i = 0; i < 70; i++)
 						map[i] = rep_st_map[i]
 					for (i = 0; i < rep_st_transp.length; i++)
 						transp[i] = rep_st_transp[i];
-					play_factor = rep_st_fac
+					play_factor = rep_st_fac;
+					abc_time = s.time
 				} else {			// back to start
 					s = start;
 					key_map(voice_tb[0].key);
-					set_voices()
+					set_voices();
+					abc_time = s.time
+					break
 				}
-				abc_time = s.time
-				break
 			}
+
+			if (s.type != BAR)
+				break
+			if (!s.invis)
+				bar_map()
 
 			// left repeat
 			if (s.bar_type[s.bar_type.length - 1] == ':') {
 				rep_st_s = s
-				if (!s.invis)
-					bar_map()
 				for (i = 0; i < 70; i++)
 					rep_st_map[i] = map[i];
 				rep_st_transp = []
@@ -293,9 +311,6 @@ var	BAR = 0,
 			} else if (s.text && s.text[0] == '1') {
 				rep_en_s = s
 			}
-
-			if (!s.invis)
-				bar_map()
 			break
 		case CLEF:
 			transp[s.v] = (!s.clef_octave || s.clef_oct_transp) ?
