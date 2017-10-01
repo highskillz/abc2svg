@@ -169,6 +169,8 @@ var glyphs = {
 	d="m0 0v12"/>',
   sphr: '<path id="sphr" class="stroke" stroke-width="1.2"\n\
 	d="m0 0v6"/>',
+  sfz: '<text id="sfz" x="-5" y="-7" style="font:italic 14px serif">\n\
+	s<tspan font-size="16" font-weight="bold">f</tspan>z</text>',
   trl: '<text id="trl" x="-2" y="-4"\n\
 	style="font:bold italic 16px serif">tr</text>',
   opend: '<circle id="opend" class="stroke"\n\
@@ -517,6 +519,10 @@ function xygl(x, y, gl) {
 			x + tgl.x * stv_g.scale, y + tgl.y, tgl.c)
 		return
 	}
+	if (!glyphs[gl]) {
+		error(1, null, 'no definition of $1', gl)
+		return
+	}
 	def_use(gl);
 	out_XYAB('<use x="X" y="Y" xlink:href="#A"/>\n', x, y, gl)
 }
@@ -740,33 +746,29 @@ var deco_str_style = {
 crdc:	{
 		dx: 0,
 		dy: 5,
-		style: 'style="font:italic 14px serif"'
+		style: 'font:italic 14px serif'
 	},
 dacs:	{
 		dx: 0,
 		dy: 3,
-		style: 'style="font:16px serif" text-anchor="middle"'
+		style: 'font:16px serif',
+		anchor: ' text-anchor="middle"'
 	},
 fng:	{
 		dx: 0,
 		dy: 1,
-		style: 'style="font:8px Bookman" text-anchor="middle"'
+		style: 'font:8px Bookman',
+		anchor: ' text-anchor="middle"'
 	},
 pf:	{
 		dx: 0,
 		dy: 5,
-		style: 'style="font:bold italic 16px serif"'
-	},
-sfz:
-	{
-		dx: 0,
-		dy: 5,
-		style: 'style="font:bold italic 14px serif"'
+		style: 'font:bold italic 16px serif'
 	},
 '@':	{
 		dx: 0,
 		dy: 5,
-		style: 'style="font:12px sans-serif"'
+		style: 'font:12px sans-serif'
 	}
 }
 
@@ -775,17 +777,19 @@ function out_deco_str(x, y, name, str) {
 		a_deco = deco_str_style[name]
 
 	if (!a_deco) {
-		error(1, null, 'no definition of $1', name);
-		a_deco = deco_str_style['@']
+		xygl(x, y, name)
+		return
 	}
 	x += a_deco.dx;
 	y += a_deco.dy;
-	out_XYAB('<text x="X" y="Y" A>', x, y, a_deco.style);
+	if (!a_deco.def) {
+		style += "\n." + name + " {" + a_deco.style + "}";
+		a_deco.def = true
+	}
+	out_XYAB('<text x="X" y="Y" class="A"B>', x, y,
+		name, a_deco.anchor || "");
 	set_font("annotation");
-	if (name == "sfz")
-		output.push('s<tspan font-size="16" font-weight="bold">f</tspan>z')
-	else
-		out_str(str);
+	out_str(str);
 	output.push('</text>\n')
 }
 
