@@ -992,8 +992,9 @@ function do_pscom(text) {
 		return
 	case "center":
 		if (parse.state >= 2) {
-			s = new_block(cmd);
-			s.text = cnv_escape(param)
+			s = new_block("text");
+			s.text = cnv_escape(param);
+			s.opt = 'c'
 			return
 		}
 		write_text(cnv_escape(param), 'c')
@@ -1106,11 +1107,9 @@ function do_pscom(text) {
 		case -14: b = "15ma)"; break
 		}
 		if (b) {
-			if (!curvoice.second) {
-				if (!a_dcn)
-					a_dcn = []
-				a_dcn.push(b)
-			}
+			if (!a_dcn)
+				a_dcn = []
+			a_dcn.push(b);
 			set_ottava(b)
 		}
 		switch (n) {
@@ -1120,11 +1119,9 @@ function do_pscom(text) {
 		case 1: b = "8va("; break
 		case 2: b = "15ma("; break
 		}
-		if (!curvoice.second) {
-			if (!a_dcn)
-				a_dcn = []
-			a_dcn.push(b)
-		}
+		if (!a_dcn)
+			a_dcn = []
+		a_dcn.push(b);
 		set_ottava(b)
 		return
 	case "repbra":
@@ -1512,7 +1509,9 @@ function key_transp(s_key) {
 function set_k_acc(s) {
 	var i, j, n, nacc, p_acc,
 		accs = [],
-		pits = []
+		pits = [],
+		m_n = [],
+		m_d = []
 
 	if (s.k_sf > 0) {
 		for (nacc = 0; nacc < s.k_sf; nacc++) {
@@ -1531,13 +1530,21 @@ function set_k_acc(s) {
 		for (j = 0; j < nacc; j++) {
 			if (pits[j] == p_acc.pit) {
 				accs[j] = p_acc.acc
+				if (p_acc.micro_n) {
+					m_n[j] = p_acc.micro_n;
+					m_d[j] = p_acc.micro_d
+				}
 				break
 			}
 		}
 		if (j == nacc) {
 			accs[j] = p_acc.acc;
 			pits[j] = p_acc.pit
-			nacc++		/* cannot overflow */
+			if (p_acc.micro_n) {
+				m_n[j] = p_acc.micro_n;
+				m_d[j] = p_acc.micro_d
+			}
+			nacc++
 		}
 	}
 	for (i = 0; i < nacc; i++) {
@@ -1546,6 +1553,13 @@ function set_k_acc(s) {
 			p_acc = s.k_a_acc[i] = {}
 		p_acc.acc = accs[i];
 		p_acc.pit = pits[i]
+		if (m_n[i]) {
+			p_acc.micro_n = m_n[i];
+			p_acc.micro_d = m_d[i]
+		} else {
+			delete p_acc.micro_n
+			delete p_acc.micro_d
+		}
 	}
 }
 
@@ -1952,6 +1966,9 @@ function is_voice_sig() {
 		return false
 	for (s = curvoice.sym; s; s = s.next) {
 		switch (s.type) {
+		case BLOCK:
+		case REMARK:
+		case STAVES:
 		case TEMPO:
 		case PART:
 			break
@@ -2162,6 +2179,8 @@ function init_tune() {
 	new_syst(true);
 	staves_found = -1;
 	gene = {}
+	a_de = []			// remove old decorations
+	od = {}				// no ottava decorations anymore
 }
 
 // treat a 'V:' info

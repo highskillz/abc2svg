@@ -58,7 +58,6 @@ user.textrans = {
 	"Bad page width": "Mauvaise largeur de page",
 	"Bad program in %%MIDI": "Mauvais 'program' dans %%MIDI",
 	"Bad scale value in %%font": "Mauvaise échelle dans %%font",
-	"Bad stafflines= value": "Valeur incorrecte pour stafflines=",
 	"Bad tie": "Mauvaise liaison de prolongation",
 	"Bad transpose value": "Mauvaise valeur de transposition",
 	"Bad user character '$1'": "Caractère illégal '$1' dans U:/%%user",
@@ -72,6 +71,8 @@ user.textrans = {
 				"'%%fullsvg' ne peut pas être dans un morceau",
 	"Cannot have a bar in grace notes":
 			"Il ne peut pas y avoir de barre dans les notes d'agrément",
+	"Cannot have a broken rhythm in grace notes":
+			"Il ne peut pas y avoir '<' ou '>' dans les notes d'agrément",
 	"Cannot have V:* in tune body":
 			"Il ne peut pas y avoir V:* dans le corps du morceau",
 	"Cannot read file '$1'": "Fichier '$1' inexistant",

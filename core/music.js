@@ -29,7 +29,7 @@ var	gene,
 	space_tb = new Float32Array([
 		7, 10, 14.15, 20, 28.3,
 		40,			/* crotchet (whole note / 4) */
-		56.6, 80, 113, 150
+		56.6, 80, 100, 120
 	]),
 	smallest_duration
 
@@ -60,6 +60,15 @@ var hw_tb = new Float32Array([
 	6,		// OVAL
 	7,		// OVALBARS
 	8		// SQUARE
+])
+
+/* head width for voice overlap - index = note head type */
+var w_note = new Float32Array([
+	3.5,		// FULL
+	3.7,		// EMPTY
+	5,		// OVAL
+	6,		// OVALBARS
+	7		// SQUARE
 ])
 
 function set_head_shift(s) {
@@ -321,13 +330,6 @@ function combine_notes(s, s2) {
 	s.ymn = 3 * (s.notes[0].pit - 18) - 4;
 	s.yav = (s.ymx + s.ymn) / 2
 
-	if (s.a_dd) {
-		if (s2.a_dd)
-			s.a_dd = s.a_dd.concat(s2.a_dd)
-	} else {
-		s.a_dd = s2.a_dd
-	}
-
 	/* force the tie directions */
 	type = s.notes[0].ti1
 	if ((type & 0x0f) == SL_AUTO)
@@ -362,6 +364,12 @@ function do_combine(s) {
 			s.text = s2.text
 		if (s2.a_gch)
 			s.a_gch = s2.a_gch;
+		if (s2.a_dd) {
+			if (!s.a_dd)
+				s.a_dd = s2.a_dd
+			else
+				s.a_dd = s.a_dd.concat(s2.a_dd)
+		}
 		unlksym(s2)			/* remove the next symbol */
 
 		/* there may be more voices */
@@ -704,7 +712,17 @@ function set_width(s) {
 		/* room for shifted heads and accidental signs */
 		if (s.xmx > 0)
 			s.wr += s.xmx + 4;
-		s2 = s.prev
+		for (s2 = s.prev; s2; s2 = s2.prev) {
+			switch (s2.type) {
+			case BLOCK:
+			case PART:
+			case REMARK:
+			case STAVES:
+			case TEMPO:
+				continue
+			}
+			break
+		}
 		if (s2) {
 			switch (s2.type) {
 			case BAR:
@@ -876,8 +894,20 @@ function set_width(s) {
 //			s.notes[0].shhd = (w - 5) * -.5
 
 			/* if preceeded by a grace note sequence, adjust */
-			if (s.prev && s.prev.type == GRACE)
-				s.wl -= 8
+			for (s2 = s.prev; s2; s2 = s2.prev) {
+				switch (s2.type) {
+				case BLOCK:
+				case PART:
+				case REMARK:
+				case STAVES:
+				case TEMPO:
+					continue
+				case GRACE:
+					s.wl -= 8
+					break
+				}
+				break
+			}
 		} else {
 			s.wl = s.wr = 0
 		}
@@ -975,6 +1005,9 @@ function set_width(s) {
 			s.wr = 8
 		}
 		return
+	case CUSTOS:
+		s.wl = s.wr = 4
+		return
 	case BLOCK:				// no width
 	case PART:
 	case REMARK:
@@ -1019,6 +1052,8 @@ function set_space(s) {
 			len /= 4
 		else
 			len /= 2
+	} else if (!s.next && len >= BASE_LEN) {
+		len /= 2
 	}
 	if (len >= BASE_LEN / 4) {
 		if (len < BASE_LEN / 2)
@@ -1123,7 +1158,8 @@ function add_end_bar(s) {
 		st: s.st,
 		dur: 0,
 		seqst: true,
-		invis: true
+		invis: true,
+		time: s.time + s.dur
 //,wl:0,wr:0
 	}
 }
@@ -1185,14 +1221,10 @@ function set_allsymwidth(last_s) {
 		if (!s.ts_next)
 			break
 	}
-	if (s.wr > xa)
-		xa = s.wr;
 	s2 = add_end_bar(s);
 	s2.prev = s2.ts_prev = s;
 	s.ts_next = s.next = s2;
-	s2.time = s.time + s.dur;
-	s2.shrink = xa;
-	s.eoln = false;
+	s2.shrink = xa + 8;
 	s2.space = set_space(s2)
 }
 
@@ -1432,8 +1464,6 @@ function custos_add(s) {
 	s.ts_prev = new_s;
 
 	new_s.seqst = true;
-	new_s.wl = 8;
-	new_s.wr = 4;
 	new_s.shrink = s.shrink
 	if (new_s.shrink < 8 + 4)
 		new_s.shrink = 8 + 4;
@@ -1460,7 +1490,8 @@ function set_nl(s) {
 	function set_eol(s) {
 		if (cfmt.custos && voice_tb.length == 1)
 			custos_add(s)
-		s.nl = true
+		if (s.ts_next)
+			s.nl = true
 	} // set_eol()
 
 	// set the eol on the next symbol
@@ -3309,15 +3340,6 @@ function same_head(s1, s2) {
 	return true
 }
 
-/* width of notes for voice overlap - index = note head type */
-var w_note = [
-	3.5,		// FULL
-	3.7,		// EMPTY
-	5,		// OVAL
-	6,		// OVALBARS
-	7		// SQUARE
-]
-
 /* handle unison with different accidentals */
 function unison_acc(s1, s2, i1, i2) {
 	var m, d
@@ -4164,14 +4186,11 @@ function set_piece() {
 	    var	s2 = tsnext.ts_prev;
 		while (!s2.seqst)
 			s2 = s2.ts_prev;
-		s = tsfirst;
-		tsfirst = s2;
-	    var sh = s2.shrink,
-		sp = s2.space;
-		set_allsymwidth();
-		s2.shrink = sh;
-		s2.space = sp;
-		tsfirst = s
+		s = add_end_bar(s2)
+		s.prev = s.ts_prev = s2;
+		s2.ts_next = s2.next = s;
+		s.shrink = tsnext.shrink;
+		s.space = tsnext.space * .9 - 7
 	}
 }
 
@@ -4400,10 +4419,6 @@ function gen_init(page_chg) {
 			break
 		case BLOCK:
 			switch (s.subtype) {
-			case "center":
-				set_page();
-				write_text(s.text, 'c')
-				break
 			case "leftmargin":
 			case "rightmargin":
 			case "pagescale":

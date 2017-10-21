@@ -17,8 +17,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with abc2svg-core.  If not, see <http://www.gnu.org/licenses/>.
 
-var	dd_tb= {},		// table of decoration definitions
-	a_de = []		// array of the decoration elements
+var	dd_tb = {},		// definition of the decorations
+	a_de,			// array of the decoration elements
+	od		// ottava: index = type + staff, value = counter + voice number
 
 // standard decorations
 var std_deco = {
@@ -434,9 +435,10 @@ function d_trill(de) {
 		s = de.start.s,
 		x = s.x
 
-	if (s.type == NOTE
-	 && s.a_dd && s.a_dd.length > 1)
-		x += 10;		// hack 'tr~~~~~'
+	if (de.prev) {			// hack 'tr~~~~~'
+		x = de.prev.x + 10;
+		y = de.prev.y
+	}
 	de.st = st
 
 	if (de.dd.func != 4) {		// if not below
@@ -466,7 +468,8 @@ function d_trill(de) {
 		}
 	}
 	dd = de.dd;
-	y = y_get(st, up, x, w)
+	if (!y)
+		y = y_get(st, up, x, w)
 	if (up) {
 		tmp = staff_tb[s.st].topbar + 2
 		if (y < tmp)
@@ -959,6 +962,8 @@ function draw_all_deco() {
 			set_scale(s);
 
 		st = de.st;
+		if (!staff_tb[st].topbar)
+			continue		// invisible staff
 		x = de.x;
 //		y = de.y + staff_tb[st].y / staff_tb[st].staffscale
 		y = de.y + staff_tb[st].y
@@ -1061,8 +1066,10 @@ function draw_all_deco() {
 /* (the staves are not yet defined) */
 /* (delayed output) */
 /* this function must be called first as it builds the deco element table */
+    var	ottava = {"8va(":1, "8va)":1, "15ma(":1, "15ma)":1,
+		"8vb(":1, "8vb)":1, "15mb(":1, "15mb)":1}
 function draw_deco_near() {
-	var s, g, dd, first, m
+    var	s, g
 
 	// update starting old decorations
 	function ldeco_update(s) {
@@ -1081,7 +1088,7 @@ function draw_deco_near() {
 
 	/* -- create the deco elements, and treat the near ones -- */
 	function create_deco(s) {
-		var	dd, k, l, pos, de,
+		var	dd, k, l, pos, de, x,
 			nd = s.a_dd.length
 
 /*fixme:pb with decorations above the staff*/
@@ -1097,6 +1104,22 @@ function draw_deco_near() {
 			case 4:
 //fixme:trill does not work yet
 			case 5:				/* trill */
+				if (ottava[dd.name]) {	// only one ottava per staff
+					x = dd.name.slice(0, -1) + s.st.toString()
+					if (od[x]) {
+						if (dd.name[dd.name.length - 1] == '(') {
+							od[x]++
+							continue
+						}
+						od[x]--
+						if (s.v + 1 != od[x] >> 8
+						 || !od[x])
+							continue
+						od[x] &= 0xff
+					} else if (dd.name[dd.name.length - 1] == '(') {
+						od[x] = 1 + ((s.v + 1) << 8)
+					}
+				}
 				pos = s.pos.orn
 				break
 			case 6:				/* d_pf */
@@ -1252,6 +1275,11 @@ function draw_deco_near() {
 			}
 			de2.start = de;
 			de2.defl.nost = de.defl.nost
+
+			// handle 'tr~~~~~'
+			if (dd.name == "trill("
+			 && i > 0 && a_de[i - 1].dd.name == "trill")
+				de2.prev = a_de[i - 1]
 		}
 
 		// add starting decorations
@@ -1295,12 +1323,9 @@ function draw_deco_near() {
 		switch (s.type) {
 		case BAR:
 		case MREST:
-			break
 		case NOTE:
 		case REST:
 		case SPACE:
-			if (!first)
-				first = s
 			break
 		case GRACE:
 			for (g = s.extra; g; g = g.next)

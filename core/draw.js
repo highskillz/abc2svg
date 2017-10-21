@@ -37,6 +37,8 @@ var	STEM_MIN	= 16,	/* min stem height under beams */
 	GSTEM		= 15,	/* grace note stem length */
 	GSTEM_XOFF	= 2.3	/* x offset for grace note stem */
 
+    var cache
+
 /* -- compute the best vertical offset for the beams -- */
 function b_pos(grace, stem, nflags, b) {
 	var	top, bot, d1, d2,
@@ -1015,7 +1017,7 @@ function draw_rest(s) {
 
 	/* don't display the rests of invisible staves */
 	/* (must do this here for voices out of their normal staff) */
-	if (p_staff.empty)
+	if (!p_staff.topbar)
 		return
 
 	/* if rest alone in the measure or measure repeat, center */
@@ -1077,8 +1079,14 @@ function draw_rest(s) {
 		j = y / 6
 		switch (i) {
 		default:
-			if (p_staff.stafflines[j + 1] != '|')
+			switch (p_staff.stafflines[j + 1]) {
+			case '|':
+			case '[':
+				break
+			default:
 				xygl(x, y + 6 + staffb, "hl1")
+				break
+			}
 			if (i == 9) {			/* longa */
 				y -= 6;
 				j--
@@ -1090,8 +1098,14 @@ function draw_rest(s) {
 		case 6:					/* minim */
 			break
 		}
-		if (p_staff.stafflines[j] != '|')
+		switch (p_staff.stafflines[j]) {
+		case '|':
+		case '[':
+			break
+		default:
 			xygl(x, y + staffb, "hl1")
+			break
+		}
 	}
 	x += 8;
 	y += staffb + 3
@@ -1119,26 +1133,28 @@ function draw_gracenotes(s) {
 		draw_note(g, !bm.s2)
 		if (g == bm.s2)
 			bm.s2 = null			/* (draw flags again) */
-
-		if (g.sappo) {				/* (on 1st note only) */
-			if (!g.next) {			/* if one note */
-				x1 = 9;
-				y1 = g.stem > 0 ? 5 : -5
-			} else {			/* many notes */
-				x1 = (g.next.x - g.x) * .5 + 4;
-				y1 = (g.ys + g.next.ys) * .5 - g.y
-				if (g.stem > 0)
-					y1 -= 1
-				else
-					y1 += 1
-			}
-			note = g.notes[g.stem < 0 ? 0 : g.nhd];
-			out_acciac(x_head(g, note), y_head(g, note),
-					x1, y1, g.stem > 0)
-		}
 		anno_stop(g)
 		if (!g.next)
 			break			/* (keep the last note) */
+	}
+
+	// if an acciaccatura, draw a bar 
+	if (s.sappo) {
+		g = s.extra
+		if (!g.next) {			/* if one note */
+			x1 = 9;
+			y1 = g.stem > 0 ? 5 : -5
+		} else {			/* many notes */
+			x1 = (g.next.x - g.x) * .5 + 4;
+			y1 = (g.ys + g.next.ys) * .5 - g.y
+			if (g.stem > 0)
+				y1 -= 1
+			else
+				y1 += 1
+		}
+		note = g.notes[g.stem < 0 ? 0 : g.nhd];
+		out_acciac(x_head(g, note), y_head(g, note),
+				x1, y1, g.stem > 0)
 	}
 
 	/* slur */
@@ -3414,13 +3430,9 @@ function set_staff() {
 	maxsep = cfmt.maxstaffsep * .5
 	if (dy > maxsep)
 		dy = maxsep;
-	y += dy
-//fixme: what is that???
-	if (y > cfmt.maxstaffsep)
-		y = cfmt.maxstaffsep
 
 	// return the height of the whole staff system
-	return y
+	return y + dy
 }
 
 /* -- draw the staff systems and the measure bars -- */
@@ -3455,32 +3467,63 @@ function draw_systems(indent) {
 
 	/* -- draw a staff -- */
 	function draw_staff(st, x1, x2) {
-		var	w, i, dx,
-			y = staff_tb[st].y,
+		var	w, ws, i, dy, ty,
+			y = 0,
+			ln = "",
 			stafflines = staff_tb[st].stafflines,
 			l = stafflines.length
 
-		for (i = 0; i < l; i++) {
-			if (stafflines[i] != '.') {
-				set_sscale(st);
-				w = (x2 - x1) / stv_g.scale;
-				xypath(x1, y);
-				output.push('h' + w.toFixed(2));
-				y = 0
-				for (i++; i < l; i++) {
-					y -= 6
-					if (stafflines[i] != '.') {
-						output.push('m-' + w.toFixed(2) +
-								' ' + y +
-								'h' + w.toFixed(2));
-						y = 0
-					}
-				}
-				output.push('"/>\n')
-				break
-			}
-			y += 6
+		if (!stafflines.match(/[\[|]/))
+			return				// no line
+		w = x2 - x1;
+		set_sscale(st)
+
+		// check if default staff
+		if (cache && cache.st_l == stafflines && cache.st_w == w) {
+			xygl(x1, staff_tb[st].y, "stdef")
+			return
 		}
+		ws = w / stv_g.scale
+		for (i = 0; i < l; i++, y -= 6) {
+			if (stafflines[i] == '.')
+				continue
+			dy = 0
+			for (; i < l; i++, y -= 6, dy -= 6) {
+				switch (stafflines[i]) {
+				case '.':
+					continue
+				case ty:
+					ln += 'm-' + ws.toFixed(2) +
+						' ' + dy +
+						'h' + ws.toFixed(2);
+					dy = 0
+					continue
+				}
+				if (ty != undefined)
+					ln += '"/>\n';
+				ty = stafflines[i]
+				ln += '<path class="stroke"'
+				if (ty == '[')
+					ln += ' stroke-width="1.5"';
+				ln += ' d="m0 ' + y + 'h' + ws.toFixed(2);
+				dy = 0
+			}
+			ln += '"/>\n'
+		}
+		y = staff_tb[st].y
+		if (!cache) {
+			ws = get_lwidth()
+			if (w == ws) {
+				cache = {
+					st_l: stafflines,
+					st_w: w
+				}
+				glyphs.stdef = '<g id="stdef">\n' + ln + '</g>';
+				xygl(x1, y, "stdef")
+				return
+			}
+		}
+		out_XYAB('<g transform="translate(X, Y)">\n' + ln + '</g>\n', x1, y)
 	} // draw_staff()
 
 	draw_vname(indent)
@@ -3645,7 +3688,7 @@ function draw_symbols(p_voice) {
 			if (s.second)
 /*			 || p_voice.st != st)	*/
 				break		/* only one clef per staff */
-			if (staff_tb[st].empty)
+			if (!staff_tb[s.st].topbar)
 				break
 			set_color(undefined);
 			set_sscale(st);
@@ -3675,7 +3718,7 @@ function draw_symbols(p_voice) {
 		case METER:
 			p_voice.meter = s
 			if (s.second
-			 || staff_tb[s.st].empty)
+			 || !staff_tb[s.st].topbar)
 				break
 			if (cfmt.alignbars && s.st != 0)
 				break
@@ -3688,7 +3731,7 @@ function draw_symbols(p_voice) {
 		case KEY:
 			p_voice.key = s
 			if (s.second
-			 || staff_tb[s.st].empty)
+			 || !staff_tb[s.st].topbar)
 				break
 			set_color(undefined);
 			set_sscale(s.st);

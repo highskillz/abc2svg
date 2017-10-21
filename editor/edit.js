@@ -27,6 +27,7 @@ var	abc_images,			// image buffer
 	abc,				// Abc object
 	ref,				// source reference array
 	colcl = [],			// colorized classes
+	colcl_sav,			// (saved while playing)
 	abcplay,			// play engine
 	a_pe,				// playing events
 	playing,
@@ -218,7 +219,7 @@ function render() {
 		alert(e.message + '\nabc2svg tosvg bug - stack:\n' + e.stack)
 		return
 	}
-//	document.body.style.cursor = "default";
+//	document.body.style.cursor = "auto";
 
 	try {
 		target.innerHTML = abc_images
@@ -244,7 +245,7 @@ function render() {
 		i = elts.length
 		while (--i >= 0) {
 			elt = elts[i];
-			elt.onmousedown = function(e) {svgsel(e, this)}
+			elt.onmousedown = svgsel
 		}
 	}, 300)
 }
@@ -271,6 +272,8 @@ function gotoabc(l, c) {
 function m_over(elt) {
 	if (selrec.rect)
 		return
+	if (colcl.length > 1)
+		return
 	colorsel(false)
 	var cl = elt.getAttribute('class');
 	colcl = [cl.split(' ')[1]];	// cl[0]:'abcr', cl[1]:elt ref
@@ -278,9 +281,16 @@ function m_over(elt) {
 }
 
 // select elements in an image
-function svgsel(evt, svg) {
+function svgsel(evt) {
 var	pt, nr, i, elts, elt, x, y, cl,
-	xmlns = "http://www.w3.org/2000/svg"
+	svg = evt.target
+
+	while (svg.tagName != 'svg') {
+		svg = svg.parentNode
+		if (!svg)
+			return
+	}
+
 	switch (evt.type) {
 	case "mousedown":
 		if (selrec.rect) {
@@ -288,13 +298,14 @@ var	pt, nr, i, elts, elt, x, y, cl,
 			selrec.rect = null
 		}
 		colorsel(false);
-		svg.onmousemove = function(e) {svgsel(e, this)};
-		svg.onmouseup = function(e) {svgsel(e, this)};
+		svg.onmousemove = svgsel;
+		svg.onmouseup = svgsel;
 		pt = svg.getBoundingClientRect();
 		selrec.xs = evt.clientX - pt.left;
 		selrec.ys = evt.clientY - pt.top;
 		selrec.sel = true;
-		evt.stopPropagation()
+		evt.stopImmediatePropagation();
+		evt.preventDefault()
 		break
 	case "mousemove":
 		if (!selrec.sel)
@@ -304,7 +315,8 @@ var	pt, nr, i, elts, elt, x, y, cl,
 		selrec.y = evt.clientY - pt.top
 		if (!selrec.rect) {
 			nr = true;
-			selrec.rect = document.createElementNS(xmlns, 'rect');
+			selrec.rect = document.createElementNS("http://www.w3.org/2000/svg",
+								'rect');
 			selrec.rect.setAttribute("x", selrec.xs);
 			selrec.rect.setAttribute("y", selrec.ys);
 		}
@@ -317,7 +329,8 @@ var	pt, nr, i, elts, elt, x, y, cl,
 			selrec.rect.setAttribute("stroke", "blue");
 			svg.appendChild(selrec.rect)
 		}
-		evt.stopPropagation()
+		evt.stopImmediatePropagation();
+		evt.preventDefault()
 		break
 	case "mouseup":
 //	case "mouseout":
@@ -349,13 +362,14 @@ var	pt, nr, i, elts, elt, x, y, cl,
 		}
 		selrec.rect = null;
 		colorsel(true);
-		evt.stopPropagation()
+		evt.stopImmediatePropagation();
+		evt.preventDefault()
 		break
 	}
 }
 
 // colorize the selection
-function colorsel(on) {
+function colorsel(on, nosel) {
 var	i, j, elts, d,
 	i1 = 1000000,	// (hope a ABC file is smaller than that!)
 	i2 = 0,
@@ -374,7 +388,7 @@ var	i, j, elts, d,
 				i2 = ref[d[1]]
 		}
 	}
-	if (i1 < i2) {
+	if (!nosel && i1 < i2) {
 		var s = document.getElementById("source");
 		s.setSelectionRange(i1, i2);
 		s.blur();
@@ -405,7 +419,7 @@ function seltxt(elt) {
 		})
 	}
 	if (colcl.length != 0) {
-		colorsel(true);
+		colorsel(true, true);
 		s = document.getElementById("dright");
 	  z = window.document.defaultView.getComputedStyle(s).getPropertyValue('z-index')
 		if (z != 10) {			// if select from textarea
@@ -502,9 +516,31 @@ function notehlight(i, on) {
 }
 function endplay() {
 	document.getElementById("playbutton").innerHTML = texts.play;
-	playing = false
+	setTimeout(function() {
+		playing = false;
+		colcl = colcl_sav;
+		colorsel(true)
+	}, 2000)
 }
 function play_tune() {
+    var	pe
+
+	function build_pe() {
+	    var	i, e,
+		set = {}
+
+		pe = []
+		for (i = 0; i < colcl.length; i++) {
+			e = colcl[i].slice(1, -1)
+			set[e] = true
+		}
+		for (i = 0; i < a_pe.length; i++) {
+			e = a_pe[i]
+			if (set[e[0]])
+				pe.push(e)
+		}
+	} // build_pe()
+
 	if (playing) {
 		abcplay.stop();
 		endplay()
@@ -529,7 +565,14 @@ function play_tune() {
 		a_pe = abcplay.clear()	// keep the playing events
 	}
 	document.getElementById("playbutton").innerHTML = texts.stop;
-	abcplay.play(0, 1000000, a_pe)	// play all events
+
+	if (colcl.length <= 1)
+		pe = a_pe
+	else
+		build_pe();
+	colcl_sav = colcl;
+	colorsel(false);
+	abcplay.play(0, 1000000, pe)
 }
 
 // set the version and initialize the playing engine
@@ -614,11 +657,11 @@ function edit_init() {
 
 // drag and drop
 function drag_over(evt) {
-	evt.stopPropagation();
+	evt.stopImmediatePropagation();
 	evt.preventDefault()	// allow drop
 }
 function dropped(evt) {
-	evt.stopPropagation();
+	evt.stopImmediatePropagation();
 	evt.preventDefault()
 	// check if text
 	var data = evt.dataTransfer.getData("text")
