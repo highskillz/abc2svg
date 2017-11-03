@@ -328,7 +328,6 @@ function combine_notes(s, s2) {
 
 	s.ymx = 3 * (s.notes[nhd].pit - 18) + 4;
 	s.ymn = 3 * (s.notes[0].pit - 18) - 4;
-	s.yav = (s.ymx + s.ymn) / 2
 
 	/* force the tie directions */
 	type = s.notes[0].ti1
@@ -382,7 +381,7 @@ function do_combine(s) {
 function combine_voices() {
 	var s, s2, g, i, r
 
-	for (s = tsfirst; s.ts_next; s = s.ts_next) {
+	for (s = tsfirst; s; s = s.ts_next) {
 		switch (s.type) {
 		case REST:
 			if (s.combine < 0)
@@ -955,7 +954,8 @@ function set_width(s) {
 			}
 		} else {
 			n1 = n2 = s.k_a_acc.length
-			var last_acc = s.k_a_acc[0].acc
+			if (n2)
+			    var	last_acc = s.k_a_acc[0].acc
 			for (i = 1; i < n2; i++) {
 				acc = s.k_a_acc[i]
 				if (acc.pit > s.k_a_acc[i - 1].pit + 6
@@ -1103,7 +1103,7 @@ function set_space(s) {
 		case TEMPO:
 			s = s.ts_next
 			if (!s)
-				return 0
+				return space
 			continue
 		}
 		break
@@ -1818,9 +1818,9 @@ function cut_tune(lwidth, indent) {
 	}
 
 	// restore the page parameters at start of line
-	cfmt.leftmargin = pg_sav.leftmargin,
-	cfmt.rightmargin = pg_sav.rightmargin,
-	cfmt.pagewidth = pg_sav.pagewidth,
+	cfmt.leftmargin = pg_sav.leftmargin;
+	cfmt.rightmargin = pg_sav.rightmargin;
+	cfmt.pagewidth = pg_sav.pagewidth;
 	cfmt.scale = pg_sav.scale
 }
 
@@ -2040,7 +2040,8 @@ function set_auto_clef(st, s_start, clef_type_start) {
 function set_clefs() {
 	var	s, s2, st, v, p_voice, g, new_type, new_line, p_staff, pit,
 		staff_clef = new Array(nstaff),	// st -> { clef, autoclef }
-		sy = cur_sy
+		sy = cur_sy,
+		mid = []
 
 	// create the staff table
 	staff_tb = new Array(nstaff)
@@ -2089,13 +2090,15 @@ function set_clefs() {
 		}
 		staff_clef[st].clef = staff_tb[st].clef = s
 	}
+	for (st = 0; st <= sy.nstaff; st++)
+		mid[st] = (sy.staves[st].stafflines.length - 1) * 3
 
 	for (s = tsfirst; s; s = s.ts_next) {
 		if (s.repeat_n)
 			set_repeat(s)
 
-		// handle %%staves
-		if (s.type == STAVES) {
+		switch (s.type) {
+		case STAVES:
 			sy = s.sy
 			for (st = 0; st <= nstaff; st++)
 				staff_clef[st].autoclef = true
@@ -2118,6 +2121,8 @@ function set_clefs() {
 				if (!s2.clef_auto)
 					staff_clef[st].autoclef = false
 			}
+			for (st = 0; st <= sy.nstaff; st++)
+				mid[st] = (sy.staves[st].stafflines.length - 1) * 3
 			for (v = 0; v < voice_tb.length; v++) {
 				if (sy.voices[v].range < 0
 				 || sy.voices[v].second)	// main voices
@@ -2154,9 +2159,11 @@ function set_clefs() {
 				if (new_type == staff_clef[st].clef.clef_type
 				 && new_line == staff_clef[st].clef.clef_line)
 					continue
-				g = s
-				while (g.v != v)
-					g = g.ts_next;
+				g = s.ts_next
+				while (g && (g.v != v || g.st != st))
+					g = g.ts_next
+				if (!g)				// ??
+					continue
 				if (g.type != CLEF) {
 					g = insert_clef(g, new_type, new_line)
 					if (s2.clef_auto)
@@ -2165,9 +2172,12 @@ function set_clefs() {
 				staff_clef[st].clef = p_voice.clef = g
 			}
 			continue
-		}
-		if (s.type != CLEF)
+		default:
+			s.mid = mid[s.st]
 			continue
+		case CLEF:
+			break
+		}
 
 		if (s.clef_type == 'a') {
 			s.clef_type = set_auto_clef(s.st,
@@ -2339,7 +2349,6 @@ function set_pitch(last_s) {
 			if (s.type == NOTE) {
 				s.ymx = 3 * (s.notes[s.nhd].pit - 18) + 4;
 				s.ymn = 3 * (s.notes[0].pit - 18) - 4;
-				s.yav = (s.ymx + s.ymn) / 2
 			} else {
 				s.y = (((s.notes[0].pit - 18) / 2) | 0) * 6;
 				s.ymx = s.y + rest_sp[5 - s.nflags][0];
@@ -3130,9 +3139,8 @@ function set_indent() {
 /* -- decide on beams and on stem directions -- */
 /* this routine is called only once per tune */
 function set_beams(sym) {
-	var	s, t, g, beam, s_opp, dy, avg, n,
-		laststem = -1,
-		lasty = 0
+	var	s, t, g, beam, s_opp, dy, avg, n, m, mid_p, pu, pd,
+		laststem = -1
 
 	for (s = sym; s; s = s.next) {
 		if (s.type != NOTE) {
@@ -3155,50 +3163,59 @@ function set_beams(sym) {
 
 		if (!s.stem			/* if not explicitly set */
 		 && (s.stem = s.multi) == 0) { /* and alone on the staff */
+			mid_p = s.mid / 3 + 18
 
 			/* notes in a beam have the same stem direction */
 			if (beam) {
 				s.stem = laststem
-			} else if (s.beam_st && !s.beam_end) {
-				avg = s.yav;		/* start of beam */
-				n = 12
-				for (t = s.next; t; t = t.next) {
-					if (t.type == NOTE) {
-						if (t.multi) {
-							avg = n - t.multi
-							break
-						}
-						avg += t.yav;
-						n += 12
+			} else if (s.beam_st && !s.beam_end) {	// beam start
+				beam = true;
+				pu = s.notes[s.nhd].pit;
+				pd = s.notes[0].pit
+				for (g = s.next; g; g = g.next) {
+					if (g.type != NOTE)
+						continue
+					if (g.stem || g.multi) {
+						s.stem = g.stem || g.multi
+						break
 					}
-					if (t.beam_end)
+					if (g.notes[g.nhd].pit > pu)
+						pu = g.notes[g.nhd].pit
+					if (g.notes[0].pit < pd)
+						pd = g.notes[0].pit
+					if (g.beam_end)
 						break
 				}
-				if (avg < n)
-					laststem = 1
-				else if (avg > n || cfmt.bstemdown)
-					laststem = -1;
-				beam = true;
-				s.stem = laststem
-			} else {
-				s.stem = s.yav >= 12 ? -1 : 1
-				if (s.yav == 12		/* note on middle line */
-				 && !cfmt.bstemdown) {
-					if (!s.prev || s.prev.type == BAR) {
-						for (t = s.next; t; t = t.next) {
-							if (t.type == NOTE
-							 || t.type == BAR)
-								break
-						}
-						if (t && t.type == NOTE
-						 && t.yav < 12)
-							s.stem = 1
+				if (g.beam_end) {
+					if ((pu + pd) / 2 < mid_p) {
+						s.stem = 1
+					} else if ((pu + pd) / 2 > mid_p) {
+						s.stem = -1
 					} else {
-						dy = s.yav - lasty
-						if (dy > -7 && dy < 7)
-							s.stem = laststem
+//--fixme: equal: check all notes of the beam
+						if (cfmt.bstemdown)
+							s.stem = -1
 					}
 				}
+				if (!s.stem)
+					s.stem = laststem
+			} else {				// no beam
+				n = (s.notes[s.nhd].pit + s.notes[0].pit) / 2
+				if (n == mid_p) {
+					n = 0
+					for (m = 0; m <= s.nhd; m++)
+						n += s.notes[m].pit;
+					n /= (s.nhd + 1)
+				}
+//				s.stem = n < mid_p ? 1 : -1
+				if (n < mid_p)
+					s.stem = 1
+				else if (n > mid_p)
+					s.stem = -1
+				else if (cfmt.bstemdown)
+					s.stem = -1
+				else
+					s.stem = laststem
 			}
 		} else {			/* stem set by set_stem_dir */
 			if (s.beam_st && !s.beam_end)
@@ -3207,7 +3224,6 @@ function set_beams(sym) {
 		if (s.beam_end)
 			beam = false;
 		laststem = s.stem;
-		lasty = s.yav
 
 		if (s_opp) {			/* opposite gstem direction */
 			for (g = s_opp.extra; g; g = g.next)
@@ -3782,7 +3798,7 @@ function set_stems() {
 		if (s.type != NOTE) {
 			if (s.type != GRACE)
 				continue
-			ymin = ymax = 12
+			ymin = ymax = s.mid
 			for (g = s.extra; g; g = g.next) {
 				slen = GSTEM
 				if (g.nflags > 1)
@@ -3890,8 +3906,8 @@ function set_stems() {
 				ymn -= 3;
 			s.ymn = ymn - 4;
 			s.ys = ymx + slen
-			if (s.ys < 12)
-				s.ys = 12;
+			if (s.ys < s.mid)
+				s.ys = s.mid;
 			s.ymx = (s.ys + 2.5) | 0
 		} else {			/* stem down */
 			if (s.notes[0].pit < 18
@@ -3902,8 +3918,8 @@ function set_stems() {
 					slen -= 2
 			}
 			s.ys = ymn - slen
-			if (s.ys > 12)
-				s.ys = 12;
+			if (s.ys > s.mid)
+				s.ys = s.mid;
 			s.ymn = (s.ys - 2.5) | 0;
 			s.y = ymx
 /*fixme:the tie may be lower*/
@@ -4184,8 +4200,6 @@ function set_piece() {
 	// if the last symbol is not a bar, add an invisible bar
 	if (tsnext.ts_prev.type != BAR) {
 	    var	s2 = tsnext.ts_prev;
-		while (!s2.seqst)
-			s2 = s2.ts_prev;
 		s = add_end_bar(s2)
 		s.prev = s.ts_prev = s2;
 		s2.ts_next = s2.next = s;
@@ -4381,25 +4395,14 @@ function set_sym_line() {
 
 // set the left offset the images
 function set_posx() {
-	posx = (cfmt.leftmargin - cfmt["print-leftmargin"]) / cfmt.scale
+	posx = img.lm / cfmt.scale
 }
 
 // initialize the start of generation / new music line
 // and output the inter-staff blocks if any
-function gen_init(page_chg) {
+function gen_init() {
 	var	s = tsfirst,
 		tim = s.time
-
-	function set_page() {
-		if (!page_chg)
-			return
-		page_chg = false
-		if (cfmt.pagewidth - cfmt.leftmargin - cfmt.rightmargin < 100) {
-			error(0, undefined, "Bad staff width");
-			cfmt.pagewidth = cfmt.leftmargin + cfmt.rightmargin + 200
-		}
-		set_posx()
-	} // set_page()
 
 	for ( ; s; s = s.ts_next) {
 		if (s.time != tim) {
@@ -4426,7 +4429,6 @@ function gen_init(page_chg) {
 			case "scale":
 			case "staffwidth":
 				set_format(s.subtype, s.param);
-				page_chg = true
 				break
 			case "ml":
 				svg_flush();
@@ -4447,11 +4449,9 @@ function gen_init(page_chg) {
 				blk_out()
 				break
 			case "text":
-				set_page();
 				write_text(s.text, s.opt)
 				break
 			case "title":
-				set_page();
 				write_title(s.text, true)
 				break
 			case "vskip":
@@ -4475,7 +4475,7 @@ function gen_init(page_chg) {
 function output_music() {
 	var output_sav, v, lwidth, indent, line_height
 
-	gen_init(true)
+	gen_init()
 	if (!tsfirst)
 		return
 	set_global()
@@ -4503,8 +4503,7 @@ function output_music() {
 	if (cfmt.singleline) {
 		lwidth = get_ck_width() +
 				get_width(tsfirst, null) + indent;
-		cfmt.pagewidth = lwidth * cfmt.scale +
-				cfmt.leftmargin + cfmt.rightmargin + 2
+		img.width = lwidth * cfmt.scale + img.lm + img.rm + 2
 	} else {
 
 	/* else, split the tune into music lines */

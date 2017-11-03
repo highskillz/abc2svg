@@ -44,8 +44,11 @@ var cw_tb = new Float32Array([
 function cwid(c) {
 	var i = c.charCodeAt(0)		// utf-16
 
-	if (i >= 0x80)
+	if (i >= 0x80) {		// if not ASCII
+		if (i >= 0x300 && i < 0x370)
+			return 0;	// combining diacritical mark
 		i = 0x61		// 'a'
+	}
 	return cw_tb[i]
 }
 
@@ -200,8 +203,8 @@ function trim_title(title, is_subtitle) {
 
 // return the width of the music line
 function get_lwidth() {
-	return (cfmt.pagewidth - cfmt.leftmargin - cfmt.rightmargin
-						- 2)	// for bar thickness at eol
+	return (img.width - img.lm - img.rm
+					- 2)	// for bar thickness at eol
 			/ cfmt.scale
 }
 
@@ -211,6 +214,7 @@ function write_title(title, is_subtitle) {
 
 	if (!title)
 		return
+	set_page();
 	title = trim_title(title, is_subtitle)
 	if (is_subtitle) {
 		set_font("subtitle");
@@ -245,7 +249,8 @@ function put_inf2r(x, y, str1, str2, action) {
 function write_text(text, action) {
 	if (action == 's')
 		return				// skip
-	set_font("text")
+	set_font("text");
+	set_page();
 	var	strlw = get_lwidth(),
 		lineskip = gene.curfont.size * cfmt.lineskipfac,
 		parskip = gene.curfont.size * cfmt.parskipfac,

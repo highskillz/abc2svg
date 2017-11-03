@@ -48,6 +48,7 @@
 //		[2]: MIDI instrument
 //		[3]: MIDI note pitch (with cents)
 //		[4]: duration
+//		[5]: volume (0..1 - optional)
 //
 // stop() - stop playing
 //
@@ -402,7 +403,8 @@ function Audio5(i_conf) {
 		while (1) {
 			o = ac.createBufferSource();
 			o.buffer = sounds[e[2]][e[3] | 0];
-			o.connect(gain);
+			if (e[5] != 0)		// if no sound (rest), don't connect
+				o.connect(gain)
 			if (o.detune) {
 				d = (e[3] * 100) % 100
 				if (d)			// if micro-tone
@@ -426,8 +428,11 @@ function Audio5(i_conf) {
 			}
 
 			e = a_e[++evt_idx]
-			if (!e)
-				break
+			if (!e) {
+				setTimeout(onend,
+					(t + stime - ac.currentTime + d) * 1000)
+				return
+			}
 			t = e[1] / speed
 			if (t > maxt)
 				break
