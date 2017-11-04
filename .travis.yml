@@ -67,33 +67,11 @@ script:
 # # TRAVIS::8b
 # after_failure:
 #   - echo "TRAVIS_ID>> ($TRAVIS_BUILD_NUMBER::$TRAVIS_JOB_NUMBER)($TRAVIS_BUILD_ID::$TRAVIS_JOB_ID) at:8b.after_failure"
-
-# TRAVIS::9 (optional)
-before_deploy:
-  - echo "TRAVIS_ID>> ($TRAVIS_BUILD_NUMBER::$TRAVIS_JOB_NUMBER)($TRAVIS_BUILD_ID::$TRAVIS_JOB_ID) at:9.before_deploy"
-  - pwd
-  - echo "########################################### 91a"
-  - pwd                                   || true
-  - ls -la ${HOME}                        || true
-  - ls -la ${TRAVIS_BUILD_DIR}            || true
-  - ls -la ${TRAVIS_BUILD_DIR}/app-1      || true
-  - ls -la ${TRAVIS_BUILD_DIR}/app-1/out      || true
-  - ls -la ${TRAVIS_BUILD_DIR}/app-1/out/dist || true
-  - echo "########################################### 91z"
-  # prunes unwanted files from artifacts (we keep only packed files)
-  - pwd                                   || true
-  - ls -la ${TRAVIS_BUILD_DIR}/app-1/out/dist/*-unpacked || true
-  - rm -rf ${TRAVIS_BUILD_DIR}/app-1/out/dist/*-unpacked || true
-  - rm -rf ${TRAVIS_BUILD_DIR}/app-1/out/dist/mac        || true
-  - echo "########################################### 93a"
-  - pwd                                   || true
-  - ls -la ${HOME}                        || true
-  - ls -la ${TRAVIS_BUILD_DIR}            || true
-  - ls -la ${TRAVIS_BUILD_DIR}/app-1/out      || true
-  - ls -la ${TRAVIS_BUILD_DIR}/app-1/out/dist || true
-  - echo "########################################### 93z"
-
-
+#
+# # TRAVIS::9 (optional)
+# before_deploy:
+#   - echo "TRAVIS_ID>> ($TRAVIS_BUILD_NUMBER::$TRAVIS_JOB_NUMBER)($TRAVIS_BUILD_ID::$TRAVIS_JOB_ID) at:9.before_deploy"
+#
 # TRAVIS::10 (optional)
 # https://docs.travis-ci.com/user/deployment/
 deploy:
