@@ -1,10 +1,10 @@
 # v1.0.0   171001   webdev@highskillz.com
 #
-# making the build with a Dockerfile to be able to reuse in different environments
-# pointing to non-official npm registry to test the automated build and deployment process.
-# Please use the official npm repo! We will not support this repo 
-# (You have been warned :D)
+# Build is created via Dockerfile - this makes the build a bit more complex, but allows local testing;
 #
+# pointing to non-official npm registry to test the automated build and deployment process.
+# Please use the official npm repo! We will not support this repo
+# (You have been warned :D)
 #
 
 matrix:
