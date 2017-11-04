@@ -49,7 +49,7 @@ script:
   - docker build --rm -t abc2svg--build .
 
   - docker run --rm \
-      --env NOMIN=$NO_MINIMIZE \
+      --env NOMIN="${NO_MINIMIZE}" \
       -v ${PWD}:/work \
       -v $HOME/.npm:/root/.npm \
       abc2svg--build
