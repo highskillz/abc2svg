@@ -2,19 +2,19 @@ FROM node:8-stretch
 
 #
 # to build the image, use this:
-#   docker build --rm -t abc2svg .
+#   docker build --rm -t abc2svg--build .
 #
 # to build an external git folder, use this (Linux+Mac / Windows) (Not minifd - for testing):
-#   docker run --rm -it --volume $(pwd):/work abc2svg bash -c "ninja -t clean && NOMIN=1 ninja -v"
-#   docker run --rm -it --volume   %CD%:/work abc2svg bash -c "ninja -t clean && NOMIN=1 ninja -v"
+#   docker run --rm -it --volume $(pwd):/work abc2svg--build bash -c "ninja -t clean && NOMIN=1 ninja -v"
+#   docker run --rm -it --volume   %CD%:/work abc2svg--build bash -c "ninja -t clean && NOMIN=1 ninja -v"
 #
 # to build an external git folder, use this (Linux+Mac / Windows) (minified):
-#   docker run --rm -it --volume $(pwd):/work abc2svg
-#   docker run --rm -it --volume   %CD%:/work abc2svg
+#   docker run --rm -it --volume $(pwd):/work abc2svg--build
+#   docker run --rm -it --volume   %CD%:/work abc2svg--build
 #
 # to play with the image
-#   docker run --rm -it --volume $(pwd):/work abc2svg bash
-#   docker run --rm -it --volume   %CD%:/work abc2svg bash
+#   docker run --rm -it --volume $(pwd):/work abc2svg--build bash
+#   docker run --rm -it --volume   %CD%:/work abc2svg--build bash
 #
 
 RUN \
@@ -35,6 +35,7 @@ RUN \
     uglify-js
 
 #ADD . /work
+ENV NOMIN=""
 
 WORKDIR /work
 

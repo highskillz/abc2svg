@@ -1,0 +1,134 @@
+# v1.0.0   171001   webdev@highskillz.com
+#
+# making the build with a Dockerfile to be able to reuse in different environments
+# pointing to non-official npm registry to test the automated build and deployment process.
+# Please use the official npm repo! We will not support this repo 
+# (You have been warned :D)
+#
+#
+
+matrix:
+  include:
+    - os: linux
+      services: docker
+
+env:
+  global:
+    - NO_MINIMIZE=1
+branches:
+  only:
+    - master
+    - develop
+    - /^test--.*$/
+
+cache:
+  directories:
+    - node_modules
+    - $HOME/.npm
+
+# TRAVIS::3
+before_install:
+  - echo "TRAVIS_ID>> ($TRAVIS_BUILD_NUMBER::$TRAVIS_JOB_NUMBER)($TRAVIS_BUILD_ID::$TRAVIS_JOB_ID) at:3.before_install"
+
+  - git  --version
+  - git-lfs version || true
+  - time git-lfs pull
+
+# # TRAVIS::4
+# install:
+#
+
+# TRAVIS::5
+# before_script:
+#   - echo "TRAVIS_ID>> ($TRAVIS_BUILD_NUMBER::$TRAVIS_JOB_NUMBER)($TRAVIS_BUILD_ID::$TRAVIS_JOB_ID) at:5.before_script"
+
+# TRAVIS::6
+script:
+  - echo "TRAVIS_ID>> ($TRAVIS_BUILD_NUMBER::$TRAVIS_JOB_NUMBER)($TRAVIS_BUILD_ID::$TRAVIS_JOB_ID) at:6.script"
+
+  - docker build --rm -t abc2svg--build .
+
+  - docker run --rm \
+      --env NOMIN=$NO_MINIMIZE \
+      -v ${PWD}:/work \
+      -v $HOME/.npm:/root/.npm \
+      abc2svg--build
+
+# # TRAVIS::7 (optional) for cleaning up cache
+# before_cache:
+#   - echo "TRAVIS_ID>> ($TRAVIS_BUILD_NUMBER::$TRAVIS_JOB_NUMBER)($TRAVIS_BUILD_ID::$TRAVIS_JOB_ID) at:7.before_cache"
+#
+# # CACHE UPLOAD HAPPENS SOMEWHERE BETWEEN ::7 and ::8
+#
+# # TRAVIS::8a
+# after_success:
+#   - echo "TRAVIS_ID>> ($TRAVIS_BUILD_NUMBER::$TRAVIS_JOB_NUMBER)($TRAVIS_BUILD_ID::$TRAVIS_JOB_ID) at:8a.after_success"
+#
+# # TRAVIS::8b
+# after_failure:
+#   - echo "TRAVIS_ID>> ($TRAVIS_BUILD_NUMBER::$TRAVIS_JOB_NUMBER)($TRAVIS_BUILD_ID::$TRAVIS_JOB_ID) at:8b.after_failure"
+
+# TRAVIS::9 (optional)
+before_deploy:
+  - echo "TRAVIS_ID>> ($TRAVIS_BUILD_NUMBER::$TRAVIS_JOB_NUMBER)($TRAVIS_BUILD_ID::$TRAVIS_JOB_ID) at:9.before_deploy"
+  - pwd
+  - echo "########################################### 91a"
+  - pwd                                   || true
+  - ls -la ${HOME}                        || true
+  - ls -la ${TRAVIS_BUILD_DIR}            || true
+  - ls -la ${TRAVIS_BUILD_DIR}/app-1      || true
+  - ls -la ${TRAVIS_BUILD_DIR}/app-1/out      || true
+  - ls -la ${TRAVIS_BUILD_DIR}/app-1/out/dist || true
+  - echo "########################################### 91z"
+  # prunes unwanted files from artifacts (we keep only packed files)
+  - pwd                                   || true
+  - ls -la ${TRAVIS_BUILD_DIR}/app-1/out/dist/*-unpacked || true
+  - rm -rf ${TRAVIS_BUILD_DIR}/app-1/out/dist/*-unpacked || true
+  - rm -rf ${TRAVIS_BUILD_DIR}/app-1/out/dist/mac        || true
+  - echo "########################################### 93a"
+  - pwd                                   || true
+  - ls -la ${HOME}                        || true
+  - ls -la ${TRAVIS_BUILD_DIR}            || true
+  - ls -la ${TRAVIS_BUILD_DIR}/app-1/out      || true
+  - ls -la ${TRAVIS_BUILD_DIR}/app-1/out/dist || true
+  - echo "########################################### 93z"
+
+
+# TRAVIS::10 (optional)
+# https://docs.travis-ci.com/user/deployment/
+deploy:
+  # # https://docs.travis-ci.com/user/deployment/script/
+  # - provider: script
+  #   # on:
+  #   #   branch: master
+  #   #   tags: true
+  #   # for manual upload, use this instead of after_success so we can customize by branch if needed
+  #   script: yarn run upload:s3 -- --force
+  #   skip_cleanup: true
+
+  # https://docs.travis-ci.com/user/deployment/s3/
+  - provider: npm
+    on:
+      branch: master
+    # instead of havig to deal with git-stash issues,
+    skip_cleanup: true
+    email: webdev@highskillz.com
+    api_key: $NPM_TOKEN
+
+#   # https://docs.travis-ci.com/user/deployment/releases/
+#   - provider: releases
+
+# TRAVIS::11 (optional)
+after_deploy:
+  - echo "TRAVIS_ID>> ($TRAVIS_BUILD_NUMBER::$TRAVIS_JOB_NUMBER)($TRAVIS_BUILD_ID::$TRAVIS_JOB_ID) at:11.after_deploy"
+
+# TRAVIS::12
+after_script:
+  - echo "TRAVIS_ID>> ($TRAVIS_BUILD_NUMBER::$TRAVIS_JOB_NUMBER)($TRAVIS_BUILD_ID::$TRAVIS_JOB_ID) at:12.after_script"
+
+### examples
+# https://www.electron.build/multi-platform-build
+#   https://github.com/develar/onshape-desktop-shell/blob/master/.travis.yml
+#
+# https://github.com/electron-userland/electron-builder/blob/master/.travis.yml
+#
