@@ -1,7 +1,7 @@
 {
   "name": "abc2svg--nomin",
   "version": "1.15.0",
-  "description": "ABC music notation translator",
+  "description": "ABC music notation translator [non-official fork - pls use 'abc2svg' instead]",
   "devDependencies": {
     "uglify-js": "^2.5.0"
   },
@@ -51,7 +51,7 @@
     "music",
     "SVG"
   ],
-  "author": "Jean-François Moine",
+  "author": "HighSkillz",
   "license": "LGPL-3.0",
   "bugs": {
     "url": "https://github.com/moinejf/abc2svg/issues"
