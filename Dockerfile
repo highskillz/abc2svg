@@ -39,7 +39,9 @@ ENV NOMIN=""
 
 WORKDIR /work
 
+
+# CMD \
+#   (ninja -t clean || true) &&\
 CMD \
-  ninja -t clean &&\
   ninja -v &&\
   echo Done!
