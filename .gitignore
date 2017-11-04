@@ -7,3 +7,5 @@
 abc2svg.woff
 # important!
 !.gitignore
+!.travis.yml
+!.gitlab-ci.yml
