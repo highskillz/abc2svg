@@ -48,11 +48,13 @@ script:
 
   - docker build --rm -t abc2svg--build .
 
-  - docker run --rm \
-      --env "NOMIN=${NO_MINIMIZE}" \
-      -v ${PWD}:/work \
-      -v $HOME/.npm:/root/.npm \
-      abc2svg--build
+  - echo "${NO_MINIMIZE}"
+  - |
+      docker run --rm \
+        --env NOMIN=$NO_MINIMIZE \
+        -v ${PWD}:/work \
+        -v $HOME/.npm:/root/.npm \
+        abc2svg--build
 
 # # TRAVIS::7 (optional) for cleaning up cache
 # before_cache:
