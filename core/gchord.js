@@ -17,7 +17,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with abc2svg-core.  If not, see <http://www.gnu.org/licenses/>.
 
-// -- parse a chord indication / annotation --
+var	capo			// capo indication
+
+// -- parse a chord symbol / annotation --
 // the result is added in the global variable a_gch
 // 'type' may be a single '"' or a string '"xxx"' created by U:
 function parse_gchord(type) {
@@ -88,6 +90,8 @@ function parse_gchord(type) {
 				if (c != ' ')
 					i--
 			}
+			gch.x = x_abs;
+			gch.y = y_abs - h_ann / 2
 			break
 		case '^':
 		case '_':
@@ -98,11 +102,6 @@ function parse_gchord(type) {
 			break
 		}
 		gch.type = type
-		if (type == '@') {
-			gch.x = x_abs;
-			gch.y = y_abs;
-			y_abs -= h_ann
-		}
 		while (1) {
 			c = text[i]
 			if (!c)
@@ -148,17 +147,36 @@ function parse_gchord(type) {
 	}
 }
 
-// transpose a chord indication
+// create the guitar chords with capo
+function gch_capo(s) {
+    var	gch, gch2, i2,
+	i = 0
+
+	while (1) {
+		gch = s.a_gch[i++]
+		if (!gch)
+			return
+		if (gch.type == 'g')
+			break
+	}
+	gch2 = clone(gch);
+	gch2.text = gch_tr1(gch2.text, -cfmt.capo)
+	if (!capo) {
+		capo = true;
+		gch2.text += "  (capo: " + cfmt.capo.toString() + ")";
+	}
+	s.a_gch.splice(i, 0, gch2)
+}
+
+// transpose a chord symbol
 var	note_names = "CDEFGAB",
 	latin_names = [ "Do", "Ré", "Mi", "Fa", "Sol", "La", "Si" ],
-	acc_name = ["bb", "b", "", "#", "##"]
+	acc_name = ["bb", "b", "", "#", "##"],
+	note_pit = new Int8Array([0, 2, 4, 5, 7, 9, 11]),
+	pit_note = new Int8Array([0, 0, 1, 2, 2, 3, 3, 4, 5, 5, 6, 6]),
+	pit_acc = new Int8Array([2, 3, 2, 1, 2, 2, 3, 2, 1, 2, 1, 2])
 
-function gch_transp(s) {
-	var	gch, p,
-		i = 0,
-		i2 = curvoice.ckey.k_sf - curvoice.okey.k_sf
-
-	function gch_tr1(p) {
+	function gch_tr1(p, i2) {
 		var	new_txt, l,
 			n, i1, i3, i4, ix, a, ip, ip2,
 			latin = 0
@@ -216,30 +234,21 @@ function gch_transp(s) {
 		a = 0;
 		ip = latin + 1
 		if (latin >= 0) {		// if some chord
-			if (p[ip] == '#') {
+			while (p[ip] == '#') {
 				a++;
 				ip++
-				if (p[ip] == '#') {
-					a++;
-					ip++
-				}
-			} else if (p[ip] == 'b') {
+			}
+			while (p[ip] == 'b') {
 				a--;
 				ip++
-				if (p[ip] == 'b') {
-					a--;
-					ip++
-				}
-			} else if (p[ip] == '=') {
-				ip++
 			}
-			i3 = cde2fcg[n] + i2 + a * 7;
-			i4 = cgd2cde[(i3 + 16 * 7) % 7];	// note
-			i1 = ((((i3 + 22) / 7) | 0) + 159) % 5	// accidental
-			if (latin == 0)
-				new_txt = note_names[i4] + acc_name[i1]
-			else
-				new_txt = latin_names[i4] + acc_name[i1]
+//			if (p[ip] == '=')
+//				ip++
+			i3 = (note_pit[n] + a + i2 + 12) % 12;
+			i4 = pit_note[i3];
+			i1 = pit_acc[i3];
+			new_txt = (latin ? latin_names[i4] : note_names[i4]) +
+					acc_name[i1]
 		} else {
 			new_txt = ''
 		}
@@ -268,27 +277,31 @@ function gch_transp(s) {
 				ip2++
 			}
 		}
-		i3 = cde2fcg[n] + i2 + a * 7;
-		i4 = cgd2cde[(i3 + 16 * 7) % 7];
-		i1 = ((((i3 + 1 + 21) / 7) | 0) + 2 - 3 + 32 * 5) % 5
+		i3 = (note_pit[n] + a + i2 + 12) % 12;
+		i4 = pit_note[i3];
+		i1 = pit_acc[i3]
 		return new_txt + note_names[i4] + acc_name[i1] + p.slice(ip2)
 	} // get_tr1
+
+function gch_transp(s) {
+	var	gch, p, j,
+		i = 0,
+		i2 = ((curvoice.ckey.k_sf - curvoice.okey.k_sf + 12) * 7) % 12
 
 	while (1) {
 		gch = s.a_gch[i++]
 		if (!gch)
 			return
-		if (gch.type == 'g')
-			break
+		if (gch.type != 'g')
+			continue
+		p = gch.text;
+		j = p.indexOf('\t')
+		if (j >= 0) {
+			j++;
+			p = p.slice(0, j) + gch_tr1(p.slice(j), i2)
+		}
+		gch.text = gch_tr1(p, i2)
 	}
-
-	p = gch.text;
-	i = p.indexOf('\t')
-	if (i >= 0) {
-		i++;
-		p = p.slice(0, i) + gch_tr1(p.slice(i))
-	}
-	gch.text = gch_tr1(p)
 }
 
 // -- build the chord indications / annotations --
@@ -312,6 +325,8 @@ function gch_build(s) {
 	s.a_gch = a_gch;
 	a_gch = null
 
+	if (cfmt.capo)
+		gch_capo(s)
 	if (curvoice.vtransp)
 		gch_transp(s)
 
@@ -365,12 +380,12 @@ function gch_build(s) {
 		case '<':			/* left */
 			gch.x = -(w + 6);
 			y_left -= h_ann;
-			gch.y = y_left
+			gch.y = y_left + h_ann / 2
 			break
 		case '>':			/* right */
 			gch.x = 6;
 			y_right -= h_ann;
-			gch.y = y_right
+			gch.y = y_right + h_ann / 2
 			break
 		default:			// chord symbol
 			gch.box = box
@@ -420,7 +435,7 @@ function gch_build(s) {
 	}
 }
 
-/* -- draw the chord indications and annotations -- */
+// -- draw the chord symbols and annotations
 // (the staves are not yet defined)
 // (unscaled delayed output)
 function draw_gchord(s, gchy_min, gchy_max) {
@@ -431,7 +446,7 @@ function draw_gchord(s, gchy_min, gchy_max) {
 	var	w = s.a_gch[0].w,
 		y_above = y_get(s.st, 1, s.x - 2, w),
 		y_below = y_get(s.st, 0, s.x - 2, w),
-		yav = (s.ymx + s.ymn) >> 1
+		yav = (((s.notes[s.nhd].pit + s.notes[0].pit) >> 1) - 18) * 3
 
 	for (ix = 0; ix < s.a_gch.length; ix++) {
 		gch = s.a_gch[ix]
@@ -451,7 +466,7 @@ function draw_gchord(s, gchy_min, gchy_max) {
 		}
 	}
 
-	set_dscale(s.st, true);
+	set_dscale(s.st);
 	for (ix = 0; ix < s.a_gch.length; ix++) {
 		gch = s.a_gch[ix];
 		use_font(gch.font);
@@ -473,15 +488,15 @@ function draw_gchord(s, gchy_min, gchy_max) {
 /*fixme: what symbol space?*/
 			if (s.notes[0].acc)
 				x -= s.notes[0].shac;
-			y = gch.y + yav
+			y = gch.y + yav - h / 2
 			break
 		case '>':			/* right */
 			x += s.xmx
 			if (s.dots > 0)
 				x += 1.5 + 3.5 * s.dots;
-			y = gch.y + yav
+			y = gch.y + yav - h / 2
 			break
-		default:			// chord indication
+		default:			// chord symbol
 			hbox = gch.box ? 3 : 2
 			if (gch.y >= 0) {
 				y = gch.y + y_above;
@@ -517,7 +532,7 @@ function draw_gchord(s, gchy_min, gchy_max) {
 				var expdx = (x - s.x) / j;
 
 				x = s.x;
-				y /= staff_tb[s.st].staffscale
+				y *= staff_tb[s.st].staffscale
 				if (user.anno_start)
 					user.anno_start("gchord", gch.istart, gch.iend,
 						x - 2, y + h + 2, w + 4, h + 4, s)
@@ -542,17 +557,15 @@ function draw_gchord(s, gchy_min, gchy_max) {
 		case '@':			/* absolute */
 			y = gch.y + yav
 			if (y > 0) {
-				y2 = y + h * .8 + 3
+				y2 = y + h
 				if (y2 > staff_tb[s.st].ann_top)
 					staff_tb[s.st].ann_top = y2
 			} else {
-				y2 = y - h * .2
-				if (y2 < staff_tb[s.st].ann_bot)
-					staff_tb[s.st].ann_bot = y2
+				if (y < staff_tb[s.st].ann_bot)
+					staff_tb[s.st].ann_bot = y
 			}
 			break
 		}
-		y *= staff_tb[s.st].staffscale
 		if (user.anno_start)
 			user.anno_start("annot", gch.istart, gch.iend,
 				x - 2, y + h + 2, w + 4, h + 4, s)

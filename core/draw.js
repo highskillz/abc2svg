@@ -29,9 +29,7 @@ var	STEM_MIN	= 16,	/* min stem height under beams */
 	BEAM_DEPTH	= 3.2,	/* width of a beam stroke */
 	BEAM_OFFSET	= .25,	/* pos of flat beam relative to staff line */
 	BEAM_SHIFT	= 5,	/* shift of second and third beams */
-	BEAM_FLATFAC	= .6,	/* factor to decrease slope of long beams */
-	BEAM_THRESH	= .06,	/* flat beam if slope below this threshold */
-	BEAM_SLOPE	= .8,	/* max slope of a beam */
+	BEAM_SLOPE	= .4,	/* max slope of a beam */
 	BEAM_STUB	= 8,	/* length of stub for flag under beam */ 
 	SLUR_SLOPE	= .5,	/* max slope of a slur */
 	GSTEM		= 15,	/* grace note stem length */
@@ -96,24 +94,16 @@ var min_tb = [
 ]
 
 function calculate_beam(bm, s1) {
-	var	s, s2, notes, nflags, st, v, two_staves, two_dir, hh,
+	var	s, s2, notes, nflags, st, v, two_staves, two_dir,
 		x, y, ys, a, b, stem_err, max_stem_err,
-		sx, sy, sxx, sxy, syy, a0, stem_xoff, scale,
+		p_min, p_max, s_closest,
+		stem_xoff, scale,
 		visible, dy
 
 	if (!s1.beam_st) {	/* beam from previous music line */
 		s = sym_dup(s1);
-		s.prev = s1.prev
-		if (s.prev)
-			s.prev.next = s
-		else
-			s.p_v.sym = s;
-		s1.prev = s;
-		s.next = s1;
-		s1.ts_prev.ts_next = s;
-		s.ts_prev = s1.ts_prev;
-		s1.ts_prev = s;
-		s.ts_next = s1;
+		lkvsym(s, s1);
+		lktsym(s, s1);
 		s.x -= 12
 		if (s.x > s1.prev.x + 12)
 			s.x = s1.prev.x + 12;
@@ -196,57 +186,54 @@ function calculate_beam(bm, s1) {
 		}
 	}
 
-	sx = sy = sxx = sxy = syy = 0	/* linear fit through stem ends */
+	s_closest = s1;
+	p_min = 24;
+	p_max = 0
 	for (s = s1; ; s = s.next) {
 		if (s.type != NOTE)
 			continue
 		if ((scale = s.p_v.scale) == 1)
 			scale = staff_tb[s.st].staffscale
-		if (s.stem >= 0)
+		if (s.stem >= 0) {
 			x = stem_xoff + s.notes[0].shhd
-		else
-			x = -stem_xoff + s.notes[s.nhd].shhd;
-		x *= scale;
-		x += s.x;
-		s.xs = x;
-		y = s.ys + staff_tb[s.st].y;
-		sx += x; sy += y;
-		sxx += x * x; sxy += x * y; syy += y * y
+			if (s.notes[s.nhd].pit > p_max) {
+				p_max = s.notes[s.nhd].pit;
+				s_closest = s
+			}
+		} else {
+			x = -stem_xoff + s.notes[s.nhd].shhd
+			if (s.notes[0].pit < p_min) {
+				p_min = s.notes[0].pit;
+				s_closest = s
+			}
+		}
+		s.xs = s.x + x * scale;
 		if (s == s2)
 			break
 	}
 
-	/* beam fct: y=ax+b */
-	a = (sxy * notes - sx * sy) / (sxx * notes - sx * sx);
-	b = (sy - a * sx) / notes
-
-	/* the next few lines modify the slope of the beam */
-	if (notes >= 3) {
-		hh = syy - a * sxy - b * sy /* flatten if notes not in line */
-		if (hh > 0
-		 && hh / (notes - 2) > .5)
-			a *= BEAM_FLATFAC
-	}
-	if (a >= 0)
-		a = BEAM_SLOPE * a / (BEAM_SLOPE + a) // max steepness for beam
-	else
-		a = BEAM_SLOPE * a / (BEAM_SLOPE - a);
-
-	/* to decide if to draw flat etc. use normalized slope a0 */
-	a0 = a * (s2.xs - s1.xs) / (20 * (notes - 1))
-
-	if (a0 * a0 < BEAM_THRESH * BEAM_THRESH)
-		a = 0;			/* flat below threshhold */
-
-	b = (sy - a * sx) / notes	/* recalculate b for new slope */
-
-/*  if (nflags>1) b=b+2*stem*/	/* leave a bit more room if several beams */
-
-	/* have flat beams when asked */
-	if (cfmt.flatbeams) {
-		b = (s1.grace ? 35 : -11) + staff_tb[st].y;
+	// have flat beams when asked
+	if (cfmt.flatbeams)
 		a = 0
+
+	// if a note inside the beam is the closest to the beam, the beam is flat
+	else if (!two_dir
+	      && notes >= 3
+	      && s_closest != s1 && s_closest != s2)
+		a = 0
+
+	y = s1.ys + staff_tb[st].y
+	if (a == undefined)
+		a = (s2.ys + staff_tb[s2.st].y - y) / (s2.xs - s1.xs)
+
+	if (a != 0) {
+		if (a > 0)
+			a = BEAM_SLOPE * a / (BEAM_SLOPE + a) // max steepness for beam
+		else
+			a = BEAM_SLOPE * a / (BEAM_SLOPE - a);
 	}
+
+	b = y - a * s1.xs;
 
 /*fixme: have a look again*/
 	/* have room for the symbols in the staff */
@@ -2375,12 +2362,8 @@ function draw_tuplet(s1,
 	x1 = s1.x - 4;
 	y1 = 24
 	if (s1.st == upstaff) {
-		s3 = s1
-		if (s3.type != NOTE) {
-			for (s3 = s3.next; s3 != s2; s3 = s3.next)
-				if (s3.type == NOTE)
-					break
-		}
+		for (s3 = s1; s3.type != NOTE; s3 = s3.next)
+			;
 		ym = y_get(upstaff, 1, s3.x - 4, 8)
 		if (ym > y1)
 			y1 = ym
@@ -2389,12 +2372,8 @@ function draw_tuplet(s1,
 	}
 	y2 = 24
 	if (s2.st == upstaff) {
-		s3 = s2
-		if (s3.type != NOTE) {
-			for (s3 = s3.prev; s3 != s1; s3 = s3.prev)
-				if (s3.type == NOTE)
-					break
-		}
+		for (s3 = s2; s3.type != NOTE; s3 = s3.prev)
+			;
 		ym = y_get(upstaff, 1, s3.x - 4, 8)
 		if (ym > y2)
 			y2 = ym
@@ -2455,7 +2434,6 @@ function draw_tuplet(s1,
 	ym += dy + 2;
 	y1 = ym + a * (x1 - xm);
 	y2 = ym + a * (x2 - xm);
-	out_tubr(x1, y1 + 4, x2 - x1, y2 - y1, true);
 
 	/* shift the slurs / decorations */
 	ym += 8
@@ -2491,23 +2469,15 @@ function draw_tuplet(s1,
 	}
 
 	if (s1.st == upstaff) {
-		s3 = s1
-		if (s3.type != NOTE) {
-			for (s3 = s3.next; s3 != s2; s3 = s3.next)
-				if (s3.type == NOTE)
-					break
-		}
+		for (s3 = s1; s3.type != NOTE; s3 = s3.next)
+			;
 		y1 = y_get(upstaff, 0, s3.x - 4, 8)
 	} else {
 		y1 = 0
 	}
 	if (s2.st == upstaff) {
-		s3 = s2
-		if (s3.type != NOTE) {
-			for (s3 = s3.prev; s3 != s1; s3 = s3.prev)
-				if (s3.type == NOTE)
-					break
-		}
+		for (s3 = s2; s3.type != NOTE; s3 = s3.prev)
+			;
 		y2 = y_get(upstaff, 0, s3.x - 4, 8)
 	} else {
 		y2 = 0
@@ -2552,7 +2522,6 @@ function draw_tuplet(s1,
 	ym += dy - 10;
 	y1 = ym + a * (x1 - xm);
 	y2 = ym + a * (x2 - xm);
-	out_tubr(x1, y1 + 4, x2 - x1, y2 - y1);
 
 	/* shift the slurs / decorations */
 	ym -= 2
@@ -2570,24 +2539,18 @@ function draw_tuplet(s1,
 	}
     } /* lower voice */
 
-	if (s1.tf[2] == 1)			/* if 'which' == none */
+	if (s1.tf[2] == 1) {			/* if 'which' == none */
+		out_tubr(x1, y1 + 4, x2 - x1, y2 - y1, dir == SL_ABOVE);
 		return
-	yy = .5 * (y1 + y2)
-	if (s1.tf[2] == 0)			/* if 'which' == number */
-		out_bnum(xm, yy, p, true)
-	else
-		out_bnum(xm, yy, p + ':' +  q, true)
-	if (dir == SL_ABOVE) {
-//		yy += 8
-		yy += 9;
-//		if (s3.ymx < yy)
-//			s3.ymx = yy
-		y_set(upstaff, true, xm - 3, 6, yy)
-	} else {
-//		if (s3.ymn > yy)
-//			s3.ymn = yy
-		y_set(upstaff, false, xm - 3, 6, yy)
 	}
+	out_tubrn(x1, y1, x2 - x1, y2 - y1, dir == SL_ABOVE,
+		s1.tf[2] == 0 ? p.toString() : p + ':' +  q);
+
+	yy = .5 * (y1 + y2)
+	if (dir == SL_ABOVE)
+		y_set(upstaff, true, xm - 3, 6, yy + 9)
+	else
+		y_set(upstaff, false, xm - 3, 6, yy)
 }
 
 /* -- draw the ties between two notes/chords -- */

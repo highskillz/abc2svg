@@ -242,10 +242,25 @@ function set_acc_shft() {
 	}
 }
 
+// link a symbol before an other one
+function lkvsym(s, next) {	// voice linkage
+	s.next = next;
+	s.prev = next.prev
+	if (s.prev)
+		s.prev.next = s
+	else
+		s.p_v.sym = s;
+	next.prev = s
+}
+function lktsym(s, next) {	// time linkage
+	s.ts_next = next;
+	s.ts_prev = next.ts_prev;
+	s.ts_prev.ts_next = s;
+	next.ts_prev = s
+}
+
 /* -- unlink a symbol -- */
 function unlksym(s) {
-	var g
-
 	if (s.next)
 		s.next.prev = s.prev
 	if (s.prev)
@@ -465,17 +480,10 @@ function insert_clef(s, clef_type, clef_line) {
 
 	/* link in time */
 	while (!s.seqst)
-		s = s.ts_prev
-//	if (!s.ts_prev || s.ts_prev.type != CLEF)
-	if (s.ts_prev.type != CLEF)
-		new_s.seqst = true;
-	new_s.ts_prev = s.ts_prev;
-//	if (new_s.ts_prev)
-		new_s.ts_prev.ts_next = new_s;
-//	else
-//		tsfirst = new_s
-	new_s.ts_next = s;
-	s.ts_prev = new_s
+		s = s.ts_prev;
+	lktsym(new_s, s)
+	if (new_s.ts_prev.type != CLEF)
+		new_s.seqst = true
 	return new_s
 }
 
@@ -1159,7 +1167,11 @@ function add_end_bar(s) {
 		dur: 0,
 		seqst: true,
 		invis: true,
-		time: s.time + s.dur
+		time: s.time + s.dur,
+		nhd: 0,
+		notes: [{
+			pit: s.notes[0].pit
+		}]
 //,wl:0,wr:0
 	}
 }
@@ -1458,10 +1470,7 @@ function custos_add(s) {
 	new_s = sym_add(p_voice, CUSTOS);
 	new_s.next = s;
 	s.prev = new_s;
-	new_s.ts_prev = s.ts_prev;
-	new_s.ts_prev.ts_next = new_s;
-	new_s.ts_next = s;
-	s.ts_prev = new_s;
+	lktsym(new_s, s);
 
 	new_s.seqst = true;
 	new_s.shrink = s.shrink
@@ -2704,12 +2713,9 @@ function new_sym(type, p_voice,
 	s.prev = p_voice.last_sym;
 	p_voice.last_sym = s;
 
-	s.ts_next = last_s;
-	s.ts_prev = last_s.ts_prev;
-	s.ts_prev.ts_next = s
+	lktsym(s, last_s)
 	if (s.ts_prev.type != type)
-		s.seqst = true;
-	last_s.ts_prev = s
+		s.seqst = true
 	if (last_s.type == type && s.v != last_s.v) {
 		delete last_s.seqst;
 		last_s.shrink = 0
@@ -2862,18 +2868,20 @@ function init_music_line() {
 			continue
 		}
 
-		s = new_sym(BAR, p_voice, last_s);
-		s.istart = s2.istart;
-		s.iend = s2.iend;
-		s.bar_type = s2.bar_type
-		if (s2.invis)
-			s.invis = true
-		if (s2.norepbra)
-			s.norepbra = true;
-		s.text = s2.text;
-		s.a_gch = s2.a_gch
-		if (s2.rbstart)
-			s.rbstart = s2.rbstart
+		s2.next = p_voice.last_sym.next
+		if (s2.next)
+			s2.next.prev = s2;
+		p_voice.last_sym.next = s2;
+		s2.prev = p_voice.last_sym;
+		p_voice.last_sym = s2;
+		lktsym(s2, last_s);
+		s2.time = last_s.time
+		if (s2.ts_prev.type != s2.type)
+			s2.seqst = true;
+		if (last_s.type == s2.type && s2.v != last_s.v) {
+			delete last_s.seqst;
+			last_s.shrink = 0
+		}
 	}
 
 	/* if initialization of a new music line, compute the spacing,
