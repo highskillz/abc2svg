@@ -168,8 +168,6 @@ function AbcMIDI() {
 				}
 				break
 			case KEY:
-				if (s.st != 0)
-					break
 				key_map(s)
 				break
 			case NOTE:
@@ -185,8 +183,7 @@ function AbcMIDI() {
 					}
 					note.midi = pit2midi(p, note.acc)
 					if (note.ti1) {
-						if (note.acc)
-							tie_map[p] = map[p];
+						tie_map[p] = map[p];
 						tie_time[p] = s.time + s.dur
 					}
 				}

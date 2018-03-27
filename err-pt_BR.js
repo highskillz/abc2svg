@@ -2,11 +2,11 @@
 //			Tradução dos códigos de erro para português brasileiro
 // Adicione este arquivo na linha de comando para obter as
 // mensagens de erro em português do Brasil.
-// (Hudson Lacerda - 11/dez/2016 - 13/fev/2017)
+// (Hudson Lacerda - 11/dez/2016 - 22/jan/2018)
 
 user.textrans = {
 	"+: lyric without music": "+: palavras sem música",
-	"+: symbol line without music": "+: symbol line without music",
+	"+: symbol line without music": "+: linha de símbolos sem música",
 	"+: without previous info field": "+: continuação sem campo anterior",
 	"'{' in grace note": "'{' em notinha ornamental",
 	"'}', ')' or ']' missing in %%staves":
@@ -49,6 +49,8 @@ user.textrans = {
 	"Bad %%staffscale value": "Valor incorreto em %%staffscale",
 	"Bad char '$1' in M:": "Caractere inválido '$1' em M:",
 	"Bad character '$1'": "Caractere inválido '$1'",
+	"Bad controller number in %%MIDI": "Número inválido do controlador em %%MIDI",
+	"Bad controller value in %%MIDI": "Valor incorreto para controlador em %%MIDI",
 	"Bad duration '$1' in M:": "Duração '$1' incorreta em M:",
 	"Bad integer value": "Número inteiro incorreto",
 	"Bad instr= value": "Valor incorreto para instr=",
@@ -71,13 +73,13 @@ user.textrans = {
 	"Cannot have a bar in grace notes":
 			"Não pode haver barra de compasso em grupo de notinhas ornamentais",
 	"Cannot have a broken rhythm in grace notes":
-			"Cannot have a broken rhythm in grace notes",
-	"Cannot have V:* in tune body": "Cannot have V:* in tune body",
+			"Não pode haver ritmo quebrado em notinhas ornamentais",
+	"Cannot have V:* in tune body": "Não pode haver V:* no corpo da música",
 	"Cannot read file '$1'": "Arquivo '$1' não pôde ser aberto ou não existe",
 	"Decoration ignored": "Decoração ignorada",
 	"Empty line in tune header - ignored":
 				"Linha em branco no cabeçalho da música - ignorada",
-	"Erroneous end of voice overlap": "Terminação incorreta de superposição de vozes",
+	"Erroneous end of voice overlay": "Terminação incorreta de superposição de vozes",
 	"Incorrect 1st value in %%repeat": "Primeiro valor incorreto em %%repeat",
 	"Incorrect 2nd value in %%repeat": "Segundo valor incorreto em %%repeat",
 	"Invalid 'r' in tuplet": "'r' inválido em quiáltera",
@@ -94,7 +96,7 @@ user.textrans = {
 	"Misplaced '$1' in %%staves": "'$1' deslocado em %%staves",
 	"Misplaced dot": "Ponto fora de lugar",
 	"Mix of old and new transposition syntaxes":
-				"Mix of old and new transposition syntaxes",
+				"Mistura de sintaxes de transposição antiga e nova",
 	"No $1 after %%$2": "Falta $1 após %%$2",
 	"No </defs> in %%beginsvg sequence":
 				"Falta </defs> em bloco %%beginsvg",
@@ -107,7 +109,8 @@ user.textrans = {
 	"No end of repeat string": "Cadeia de repetição não terminada",
 	"No end of tuplet": "Quiáltera incompleta",
 	"No end of tuplet in this music line":
-				"No end of tuplet in this music line",
+				"Falta terminar quiáltera nesta linha de música",
+	"No end of voice overlay": "Falta fim de divisão de vozes",
 	"No function for decoration '$1'": "Falta função para decoração '$1'",
 	"No note before '-'": "Falta nota antes de '-'",
 	"No note before '<'": "Falta nota antes de '<'",
@@ -119,17 +122,17 @@ user.textrans = {
 				"Caractere inválido em grupo de notinhas ornamentais",
 	"Not an ASCII character": "Não é um caractere ASCII",
 	"Not enough measure bars for lyric line":
-				"Faltam barras de compasso para linha de palavras",
+				"Faltam barras de compasso na linha de palavras (letra)",
 	"Not enough measure bars for symbol line":
-				"Not enough measure bars for symbol line",
+				"Faltam barras de compasso na linha de símbolos",
 	"Not enough measures for %%repeat": "Faltam compassos para %%repeat",
 	"Not enough parameters in %%map":
 				"Parâmetros insuficientes para %%map",
 	"Not enough notes/rests for %%repeat": "Faltam notas/pausas para %%repeat",
 	"Note too long": "Duração muito longa",
 	"Note too short": "Duração muito curta",
-	"s: without music": "s: without music",
-	"Too many elements in symbol line": "Too many elements in symbol line",
+	"s: without music": "s: sem música",
+	"Too many elements in symbol line": "Excesso de elementos na linha de símbolos",
 	"Too many include levels": "Excessivos níveis de inclusão de arquivos",
 	"Too many ties": "Excesso de ligaduras de prolongamento",
 	"Too many words in lyric line": "Excesso de palavras",
@@ -139,10 +142,11 @@ user.textrans = {
 	"Unknown font $1": "Fonte $1 desconhecida",
 	"Unknown glyph: '$1'": "Glifo '$1' desconhecido",
 	"Unknown keyword '$1' in %%multicol": "Palavra-chave '$1' desconhecida em %%multicol",
+	"Unsecure code": "Código inseguro",
 	"Unterminated string": "Cadeia de caracteres não terminada",
 	"Unterminated string in Q:": "Cadeia de caracteres não terminada em Q:",
-	"Voice overlay already started": "Superposição de vozes já iniciou",
+	"Voice overlay already started": "Divisão de vozes já se iniciou",
 	"w: without music": "w: sem música",
 	"Wrong duration in voice overlay":
-				"Duração incorreta de superposição de vozes",
+				"Duração incorreta na divisão de vozes",
 }

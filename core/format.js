@@ -1,6 +1,6 @@
 // abc2svg - format.js - formatting functions
 //
-// Copyright (C) 2014-2017 Jean-Francois Moine
+// Copyright (C) 2014-2018 Jean-Francois Moine
 //
 // This file is part of abc2svg-core.
 //
@@ -24,7 +24,7 @@ var	defined_font = {},
 		serif: 1.05,
 		serifBold: 1.05,
 		'sans-serif': 1.1,
-		'sans-serifBold': 1.15,
+		'sans-serifBold': 1.1,
 		Palatino: 1.1,
 		Mono: 1.35
 	},
@@ -37,7 +37,7 @@ var cfmt = {
 	breakoneoln: true,
 	cancelkey: true,
 	composerspace: 6,
-//	contbarnb: 0,
+//	contbarnb: false,
 	dblrepbar: ':][:',
 	decoerr: true,
 	dynalign: true,
@@ -108,26 +108,11 @@ H "History: "',
 	wordsspace: 5
 }
 
-// exported function: return a parameter value
-Abc.prototype.get_fmt = function(k) {
-	return cfmt[k]
-}
-
 function get_bool(param) {
 	return !param || !param.match(/^(0|n|f)/i) // accept void as true !
 }
 
-function get_int(param) {
-	var	v = parseInt(param)
-
-	if (isNaN(v)) {
-		syntax(1, "Bad integer value");
-		v = 1
-	}
-	return v
-}
-
-// %%font <font> [<encoding>] <scale>]
+// %%font <font> [<encoding>] [<scale>]
 function get_font_scale(param) {
 	var	a = param.split(/\s+/)	// a[0] = font name
 
@@ -151,7 +136,7 @@ function get_font_scale(param) {
 
 // %%xxxfont fontname|* [encoding] [size|*]
 function param_set_font(xxxfont, param) {
-	var font, fn, old_fn, n, a, new_name, new_fn, new_size, scale
+	var font, fn, old_fn, n, a, new_name, new_fn, new_size, scale, cl
 
 	// "setfont-<n>" goes to "u<n>font"
 	if (xxxfont[xxxfont.length - 2] == '-') {
@@ -163,9 +148,24 @@ function param_set_font(xxxfont, param) {
 	fn = cfmt[xxxfont]
 	if (fn) {
 		font = font_tb[fn]
-		if (font)
+		if (font) {
 			old_fn = font.name + "." + font.size
+			if (font.class)
+				old_fn += '.' + font.class
+		}
 	}
+
+	n = param.indexOf('class=')
+	if (n >= 0) {
+		n += 6;
+		a = param.indexOf(' ', n)
+		if (a > 0)
+			cl = param.slice(n, a)
+		else
+			cl = param.slice(n);
+		param = param.replace(new RegExp('class=' + cl), '').trim()
+	}
+
 	a = param.split(/\s+/);
 	new_name = a[0]
 	if (new_name == "*"
@@ -189,6 +189,8 @@ function param_set_font(xxxfont, param) {
 		return
 	}
 	new_fn = new_name + "." + new_size
+	if (cl)
+		new_fn += '.' + cl
 	if (new_fn == old_fn)
 		return
 	font = font_tb[new_fn]
@@ -203,28 +205,13 @@ function param_set_font(xxxfont, param) {
 		}
 		font_tb[new_fn] = font
 	}
+	if (cl)
+		font.class = cl;
 	cfmt[xxxfont] = new_fn
 }
 
-/* -- get a value with a unit in 72 PPI -- */
+// get a length with a unit - return the number of pixels
 function get_unit(param) {
-	var v = parseFloat(param)
-
-	switch (param.slice(-2)) {
-	case "CM":
-	case "cm":
-		v *= 28.35
-		break
-	case "IN":
-	case "in":
-		v *= 72
-		break
-	}
-	return v
-}
-
-/* -- get a page value with a unit -- */
-function get_unitp(param) {
 	var v = parseFloat(param)
 
 	switch (param.slice(-2)) {
@@ -236,8 +223,11 @@ function get_unitp(param) {
 	case "in":
 		v *= IN
 		break
-//	default:
-//		unit required...
+	case "PT":		// paper point in 1/72 inch
+	case "pt":
+		v *= .75
+		break
+//	default:  // ('px')	// screen pixel in 1/96 inch
 	}
 	return v
 }
@@ -284,21 +274,16 @@ var posval = {
 	down: SL_BELOW,
 	hidden: SL_HIDDEN,
 	opposite: SL_HIDDEN,
+	under: SL_BELOW,
 	up: SL_ABOVE
 }
 
 /* -- set the position of elements in a voice -- */
 function set_pos(k, v) {		// keyword, value
-	if (posval[v] == undefined) {
-		syntax(1, err_bad_val_s, k)
-		return
-	}
 	k = k.slice(0, 3)
 	if (k == "ste")
 		k = "stm"
-	if (curvoice)
-		curvoice.pos = clone(curvoice.pos);
-	set_v_param(k, v, 'pos')
+	set_v_param("pos", k + ' ' + v)
 }
 
 // set/unset the fields to write
@@ -322,12 +307,9 @@ function set_writefields(parm) {
 }
 
 // set a voice specific parameter
-function set_v_param(k, v, sub) {
+function set_v_param(k, v) {
 	if (curvoice) {
-		if (sub)
-			curvoice[sub][k] = posval[v]	// sub == "pos" only
-		else
-			curvoice[k] = v
+		set_vp([k + '=', v])
 		return
 	}
 	k = [k + '=', v];
@@ -404,10 +386,15 @@ function set_format(cmd, param, lock) {
 	case "rbmin":
 	case "shiftunison":
 	case "staffnonote":
-		cfmt[cmd] = get_int(param)
+		v = parseInt(param)
+		if (isNaN(v)) {
+			syntax(1, "Bad integer value");
+			break
+		}
+		cfmt[cmd] = v
 		break
 	case "microscale":
-		f = get_int(param)
+		f = parseInt(param)
 		if (isNaN(f) || f < 4 || f > 256 || f % 1) {
 			syntax(1, err_bad_val_s, "%%" + cmd)
 			break
@@ -433,15 +420,20 @@ function set_format(cmd, param, lock) {
 			syntax(1, err_bad_val_s, '%%' + cmd)
 			break
 		}
-		if (cmd == "scale")	// old scale
+		switch (cmd) {
+		case "scale":			// old scale
 			f /= .75
-		else if (cmd == "pagescale")
+		case "pagescale":
 			cmd = "scale";
+			img.chg = true
+			break
+		}
 		cfmt[cmd] = f
 		break
 	case "bstemdown":
 	case "breakoneoln":
 	case "cancelkey":
+	case "contbarnb":
 	case "custos":
 	case "decoerr":
 	case "dynalign":
@@ -462,8 +454,13 @@ function set_format(cmd, param, lock) {
 	case "timewarn":
 	case "titlecaps":
 	case "titleleft":
-	case "titletrim":
 		cfmt[cmd] = get_bool(param)
+		break
+	case "chordnames":
+		v = param.split(',')
+		cfmt.chordnames = {}
+		for (i = 0; i < v.length; i++)
+			cfmt.chordnames['CDEFGAB'[i]] = v[i]
 		break
 	case "composerspace":
 	case "indent":
@@ -482,7 +479,7 @@ function set_format(cmd, param, lock) {
 	case "wordsspace":
 		f = get_unit(param)	// normally, unit in points - 72 DPI accepted
 		if (isNaN(f))
-			syntax(1, "Bad value in $1", '%%' + cmd)
+			syntax(1, err_bad_val_s, '%%' + cmd)
 		else
 			cfmt[cmd] = f
 		break
@@ -497,9 +494,9 @@ function set_format(cmd, param, lock) {
 	case "pagewidth":
 	case "rightmargin":
 //	case "topmargin":
-		f = get_unitp(param)	// normally unit in cm or in - 96 DPI
+		f = get_unit(param)	// normally unit in cm or in - 96 DPI
 		if (isNaN(f)) {
-			syntax(1, "Bad value in $1", '%%' + cmd)
+			syntax(1, err_bad_val_s, '%%' + cmd)
 			break
 		}
 		cfmt[cmd] = f;
@@ -507,9 +504,6 @@ function set_format(cmd, param, lock) {
 		break
 	case "concert-score":
 		cfmt.sound = "concert"
-		break
-	case "contbarnb":
-		cfmt.contbarnb = get_int(param)
 		break
 	case "writefields":
 		set_writefields(param)
@@ -577,7 +571,11 @@ function set_format(cmd, param, lock) {
 		cfmt.sound = "sounding"
 		break
 	case "staffwidth":
-		v = get_unitp(param)
+		v = get_unit(param)
+		if (isNaN(v)) {
+			syntax(1, err_bad_val_s, '%%' + cmd)
+			break
+		}
 		if (v < 100) {
 			syntax(1, "%%staffwidth too small")
 			break
@@ -592,6 +590,13 @@ function set_format(cmd, param, lock) {
 		break
 	case "textoption":
 		cfmt[cmd] = get_textopt(param)
+		break
+	case "titletrim":
+		v = Number(param)
+		if (isNaN(v))
+			cfmt[cmd] = get_bool(param)
+		else
+			cfmt[cmd] = v
 		break
 	case "combinevoices":
 	case "voicecombine":
@@ -611,15 +616,10 @@ function set_format(cmd, param, lock) {
 		set_v_param("map", param)
 		break
 	case "voicescale":
-		v = parseFloat(param)
-		if (isNaN(v) || v < .6 || v > 1.5) {
-			syntax(1, err_bad_val_s, "%%" + cmd)
-			return
-		}
-		set_v_param("scale", v)
+		set_v_param("scale", param)
 		break
 	default:		// memorize all global commands
-		if (parse.state == 0)
+		if (parse.state == 0)		// (needed for modules)
 			cfmt[cmd] = param
 		break
 	}
@@ -658,19 +658,19 @@ function style_font(fn) {		// 'font_name'.'size'
 		b = fn.indexOf("Bold");
 
 	fn = r[0];
-	r = "font:"
+	r = ''
 	if (b > 0) {
-		r += "bold ";
+		r += "font-weight:bold; ";
 		j = b
 	}
 	if (i > 0 || o > 0) {
 		if (i > 0) {
-			r += "italic "
+			r += "font-style:italic; "
 			if (i < j)
 				j = i
 		}
 		if (o > 0) {
-			r += "oblique "
+			r += "font-style:oblique; "
 			if (o < j)
 				j = o
 		}
@@ -680,9 +680,16 @@ function style_font(fn) {		// 'font_name'.'size'
 			j--;
 		fn = fn.slice(0, j)
 	}
-	return r + sz + "px " + fn
+	return 'font-family:' + fn + '; ' + r + 'font-size:' + sz + 'px'
 }
 Abc.prototype.style_font = style_font
+
+// build a font class
+function font_class(font) {
+	if (font.class)
+		return 'f' + font.fid + cfmt.fullsvg + ' ' + font.class
+	return 'f' + font.fid + cfmt.fullsvg
+}
 
 // output a font style
 function style_add_font(font) {

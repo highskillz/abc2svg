@@ -36,13 +36,6 @@
 				 <input id="sfu" type="text" maxlength="120"
 					size="50"
 					onblur="set_sfu(this.value)"/>
-				<label id="sftl">type</label>
-				 <select id="sft"
-					onchange="set_sft(['js', 'mp3', 'ogg'][this.selectedIndex])">
-					<option>js</option>
-					<option>mp3</option>
-					<option>ogg</option>
-				 </select>
 			</li>
 			<li id="playdiv2" style="display: none">
 				<label id="fo">Follow music</label>
@@ -65,29 +58,22 @@
 	</li>
 	<li class="dropbutton"><label id="lg">Language</label>
 		<ul class="droplinks">
-			<li onclick="loadlang('en')">
-				English
-			</li>
-			<li onclick="loadlang('fr')">
-				Français
-			</li>
-			<li onclick="loadlang('de')">
-				Deutsch
-			</li>
-			<li onclick="loadlang('pt_BR')">
-				Português do Brasil
-			</li>
+		<li onclick="loadlang('de')">Deutsch</li>
+		<li onclick="loadlang('en')">English</li>
+		<li onclick="loadlang('fr')">Français</li>
+		<li onclick="loadlang('it')">Italiano</li>
+		<li onclick="loadlang('pt_BR')">Português do Brasil</li>
 		</ul>
 	</li>
 	<li class="dropbutton" id="playbutton" style="display: none">Play</li>
 	<li class="dropbutton"><label id="h">Help</label>
 		<ul class="droplinks">
 			<li id="ha" onclick="popshow('help', true)">Help</li>
-			<li>
-   <a id="df" target="_blank" href="../abcm2ps-doc/features.xhtml">abc2svg features</a>
+			<li><a id="df" target="_blank"
+ href="http://moinejf.free.fr/abcm2ps-doc/features.xhtml">abc2svg features</a>
 			</li>
-			<li>
-   <a id="dp" target="_blank" href="../abcm2ps-doc/index.xhtml">abc2svg parameters</a>
+			<li><a id="dp" target="_blank"
+ href="http://moinejf.free.fr/abcm2ps-doc/index.html">abc2svg parameters</a>
 			</li>
 			<li id="a" onclick="popshow('about', true)">About</li>
 		</ul>
@@ -107,13 +93,13 @@
 
 <!-- ABC source in textarea (main and include) -->
 </p>
-<textarea id="source" rows="40" cols="73" wrap= "off"
+<textarea id="source" rows="40" cols="73" wrap="off"
 	style="font: 14px monospace"
 	onselect="seltxt(this)"
 	ondrop="dropped(event)" ondragenter="drag_over(event)"
 	ondragover="drag_over(event)"
 	oninput="src_change()"></textarea>
-<textarea id="src1" rows="40" cols="73" wrap= "off"
+<textarea id="src1" rows="40" cols="73" wrap="off"
 	style="font: 14px monospace; display: none"
 	oninput="src_change()"></textarea>
 </div>
@@ -162,7 +148,7 @@
 <div id="about" class="popup" style="width: 350px">
 <div class="close" onclick="popshow('about')">x</div>
 <p id="abc2svg">abc2svg</p>
-<p>Copyright &#x00A9; 2016-2017 Jean-François Moine</p>
+<p>Copyright &#x00A9; 2016-2018 Jean-François Moine</p>
 </div>
 
 </body>

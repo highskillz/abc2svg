@@ -1,6 +1,6 @@
 // edit.js - file used in the abc2svg editor
 //
-// Copyright (C) 2014-2017 Jean-Francois Moine
+// Copyright (C) 2014-2018 Jean-Francois Moine
 //
 // This file is part of abc2svg.
 //
@@ -17,8 +17,15 @@
 // You should have received a copy of the GNU General Public License
 // along with abc2svg.  If not, see <http://www.gnu.org/licenses/>.
 
-window.onerror = function(msg) {
-	alert("window error:" + msg)
+window.onerror = function(msg, url, line) {
+	if (typeof msg == 'string')
+		alert("window error: " + msg +
+			"\nURL: " + url +
+			"\nLine: " + line)
+	else if (typeof msg == 'object')
+		alert("window error: " + msg.type + ' ' + msg.target.src)
+	else
+		alert("window error: " + msg)
 	return false
 }
 
@@ -27,7 +34,7 @@ var	abc_images,			// image buffer
 	abc,				// Abc object
 	ref,				// source reference array
 	colcl = [],			// colorized classes
-	colcl_sav,			// (saved while playing)
+	colcl_sav,			// (saved while playing/printing)
 	abcplay,			// play engine
 	a_pe,				// playing events
 	playing,
@@ -82,7 +89,13 @@ var user = {
 			'_" x="');
 		abc.out_sxsy(x, '" y="', y);
 		abc.out_svg('" width="' + w.toFixed(2) +
-			'" height="' + h.toFixed(2) + '"/>\n')
+			'" height="' + abc.sh(h).toFixed(2) + '"/>\n')
+// with absolute coordinates, the rectangles would be inserted at the end
+// of the images as:
+//  '<rect class="abcr _' + start +
+//	'_" x="' + abc.ax(x).toFixed(2) + '" y="' + abc.ay(y).toFixed(2) +
+//	'" width="' + w.toFixed(2) +
+//	'" height="' + abc.ah(h).toFixed(2) + '"/>\n'
 	},
 	// -- optional attributes
 	page_format: true		// define the non-page-breakable blocks
@@ -97,21 +110,27 @@ function clean_txt(txt) {
 		switch (c) {
 		case '<': return "&lt;"
 		case '>': return "&gt;"
+		case '&': return "&amp;"
 		}
-		if (c == '&')
-			return "&amp;"
 		return c
 	})
 }
 
 // load a javascript file
-var jsdir = document.currentScript.src.match(/.*\//) || ['']
+var jsdir = (function() {
+    var scrs = document.getElementsByTagName('script');
+	return scrs[scrs.length - 1].src.match(/.*\//) || ''
+})()
+
 function loadjs(fn, relay) {
 	var s = document.createElement('script');
-	s.src = jsdir[0] + fn;
+	s.src = jsdir + fn;
 	s.type = 'text/javascript'
 	if (relay)
 		s.onload = relay;
+	s.onerror = function() {
+		alert('error loading ' + fn)
+	}
 	document.head.appendChild(s)
 }
 
@@ -180,17 +199,10 @@ function render() {
 	if (!content)
 		return			// empty source
 
-	// if some Postscript definition, load the interpreter
-	if (typeof Psvg != "function") {
-		if (content.indexOf('%%beginps') >= 0
-		 || document.getElementById("src1").value.indexOf('%%beginps') >= 0) {
-			var script = document.createElement('script');
-			script.src = "psvg-@MAJOR@.js";
-			script.onload = render;
-			document.head.appendChild(script)
-			return
-		}
-	}
+	// load the required modules
+	if (!modules.load(content + document.getElementById("src1").value,
+			null, render))
+		return
 
 	// if include file not loaded yet, ask it
 	i = content.indexOf('%%abc-include ')
@@ -237,10 +249,6 @@ function render() {
 		var	elts = target.getElementsByClassName('abcr'),
 			i = elts.length,
 			elt
-		while (--i >= 0) {
-			elt = elts[i];
-			elt.onmouseover = function() {m_over(this)}
-		}
 		elts = target.getElementsByTagName("svg");
 		i = elts.length
 		while (--i >= 0) {
@@ -253,7 +261,8 @@ function render() {
 // select a source ABC element
 function gotoabc(l, c) {
 	var	s = document.getElementById("source"),
-		idx = 0
+		idx = 0;
+	selsrc(0)
 	while (--l >= 0) {
 		idx = s.value.indexOf('\n', idx) + 1
 		if (idx <= 0) {
@@ -294,25 +303,31 @@ var	pt, nr, i, elts, elt, x, y, cl,
 	switch (evt.type) {
 	case "mousedown":
 		if (selrec.rect) {
-			svg.removeChild(selrec.rect);
+			selrec.rect.parentNode.removeChild(selrec.rect);
 			selrec.rect = null
 		}
 		colorsel(false);
+		window.getSelection().removeAllRanges();
 		svg.onmousemove = svgsel;
 		svg.onmouseup = svgsel;
-		pt = svg.getBoundingClientRect();
-		selrec.xs = evt.clientX - pt.left;
-		selrec.ys = evt.clientY - pt.top;
-		selrec.sel = true;
+		pt = svg.createSVGPoint();
+		pt.x = evt.clientX;
+		pt.y = evt.clientY;
+		cl = pt.matrixTransform(svg.getScreenCTM().inverse());
+		selrec.xs = cl.x;
+		selrec.ys = cl.y;
+
 		evt.stopImmediatePropagation();
 		evt.preventDefault()
 		break
 	case "mousemove":
-		if (!selrec.sel)
-			break
-		pt = svg.getBoundingClientRect();
-		selrec.x = evt.clientX - pt.left;
-		selrec.y = evt.clientY - pt.top
+		pt = svg.createSVGPoint();
+		pt.x = evt.clientX;
+		pt.y = evt.clientY;
+		cl = pt.matrixTransform(svg.getScreenCTM().inverse());
+		selrec.x = cl.x;
+		selrec.y = cl.y
+
 		if (!selrec.rect) {
 			nr = true;
 			selrec.rect = document.createElementNS("http://www.w3.org/2000/svg",
@@ -334,17 +349,18 @@ var	pt, nr, i, elts, elt, x, y, cl,
 		break
 	case "mouseup":
 //	case "mouseout":
-		if (!selrec.sel)
-			break
-		selrec.sel = false;
 		svg.onmousemove = null;
 		svg.onmouseup = null
-		if (!selrec.rect)
+		if (!selrec.rect) {
+			svg = evt.target
+			cl = svg.getAttribute('class')
+			if (cl && cl.substr(0, 4) == 'abcr')
+				m_over(svg)
 			break
+		}
 		svg.removeChild(selrec.rect);
 
 		// define the selection
-		colorsel(false);
 // (svg.getEnclosureList does not work)
 		elts = svg.getElementsByClassName("abcr");
 		i = elts.length
@@ -379,7 +395,7 @@ var	i, j, elts, d,
 		elts = document.getElementsByClassName(colcl[i]);
 		j = elts.length
 		while (--j >= 0)
-			elts[j].style.setProperty("fill-opacity", on ? 0.4 : 0)
+			elts[j].style.fillOpacity = on ? 0.4 : 0
 		if (on) {
 			d = colcl[i].split('_')
 			if (d[1] < i1)
@@ -390,6 +406,7 @@ var	i, j, elts, d,
 	}
 	if (!nosel && i1 < i2) {
 		var s = document.getElementById("source");
+		selsrc(0);
 		s.setSelectionRange(i1, i2);
 		s.blur();
 		s.focus()
@@ -401,10 +418,8 @@ var	i, j, elts, d,
 // source text selection callback
 function seltxt(elt) {
 	var	start, end, s, z, elts
-	if (colcl.length != 0) {
+	if (colcl.length != 0)
 		colorsel(false);
-		colcl = []
-	}
 	if (elt.selectionStart == undefined)
 		return
 	start = elt.selectionStart;
@@ -424,7 +439,8 @@ function seltxt(elt) {
 	  z = window.document.defaultView.getComputedStyle(s).getPropertyValue('z-index')
 		if (z != 10) {			// if select from textarea
 			elts = document.getElementsByClassName(colcl[0]);
-			elts[0].scrollIntoView()	// move the element on the screen
+			if (elts[0])
+				elts[0].scrollIntoView() // move the element on the screen
 		}
 	}
 }
@@ -488,10 +504,6 @@ function setfont() {
 function set_follow(e) {
 	abcplay.set_follow(e.checked)
 }
-// set soundfont type
-function set_sft(v) {
-	abcplay.set_sft(v)
-}
 // set soundfont URL
 function set_sfu(v) {
 	abcplay.set_sfu(v)
@@ -512,7 +524,7 @@ function set_vol(v) {
 function notehlight(i, on) {
 	var elts = document.getElementsByClassName('_' + i + '_');
 	if (elts && elts[0])
-		elts[0].style.setProperty("fill-opacity", on ? 0.4 : 0)
+		elts[0].style.fillOpacity = on ? 0.4 : 0
 }
 function endplay() {
 	document.getElementById("playbutton").innerHTML = texts.play;
@@ -613,12 +625,20 @@ function edit_init() {
 	e = document.getElementById("s1");
 	e.addEventListener("click", function(){selsrc(1)})
 
+	// remove the selection on print
+	window.addEventListener("beforeprint", function() {
+		colcl_sav = colcl;
+		colorsel(false)
+	});
+	window.addEventListener("afterprint", function() {
+		colcl = colcl_sav;
+		colorsel(true)
+	})
+
 	// if playing is possible, load the playing script
 	if (window.AudioContext || window.webkitAudioContext) {
-		var script = document.createElement('script');
-		script.src = "play-@MAJOR@.js";
-		script.onload = function() {
-			abcplay = new AbcPlay({
+		loadjs("play-@MAJOR@.js", function() {
+			abcplay = AbcPlay({
 					onend: endplay,
 					onnote:notehlight,
 					});
@@ -633,15 +653,11 @@ function edit_init() {
 
 			document.getElementById("fol").checked = abcplay.set_follow();
 			document.getElementById("sfu").value = abcplay.set_sfu();
-			var t = { js:0, mp3:1, ogg:2 };
-			document.getElementById("sft").selectedIndex =
-				t[abcplay.set_sft()];
 //			document.getElementById("spv").innerHTML =
 //				Math.log(abcplay.set_speed()) / Math.log(3);
 			document.getElementById("gvol").setAttribute("value",
 				(abcplay.set_vol() * 10) | 0)
-		}
-		document.head.appendChild(script);
+		});
 
 		user.get_abcmodel =
 			function(tsfirst, voice_tb, music_types, info) {

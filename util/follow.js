@@ -2,7 +2,7 @@
 //	abc2svg-1.js, abcemb-1.js and play-1.js.
 //	This script permits to follow the notes while playing.
 //
-// Copyright (C) 2015-2017 Jean-Francois Moine
+// Copyright (C) 2015-2018 Jean-Francois Moine
 //
 // This file is part of abc2svg.
 //
@@ -41,19 +41,23 @@ user.anno_stop = function(type, start, stop, x, y, w, h) {
 function notehlight(i, on) {
 	var elts = document.getElementsByClassName('_' + i + '_')
 	if (elts && elts[0])
-		elts[0].style.setProperty("fill-opacity", on ? 0.4 : 0)
+		elts[0].style.fillOpacity = on ? 0.4 : 0
 }
 
 // init
-	abcplay = new AbcPlay({
-				endplay: endplay,
-				onnote: notehlight
-			});
-	abcplay.set_follow(1);
+function follow() {
+
+	// wait until the driver is loaded
+	if (!playconf) {
+		setTimeout(follow, 1000)
+		return
+	}
+	playconf.onnote = notehlight
 
 	// create the style of the rectangles
-	setTimeout(function() {
-		var sty = document.createElement("style");
-		sty.innerHTML = ".abcr {fill: #d00000; fill-opacity: 0; z-index: 15}";
-		document.body.appendChild(sty)
-	}, 1000)
+	var sty = document.createElement("style");
+	sty.innerHTML = ".abcr {fill: #d00000; fill-opacity: 0; z-index: 15}";
+	document.body.appendChild(sty)
+}
+
+setTimeout(follow, 1000)

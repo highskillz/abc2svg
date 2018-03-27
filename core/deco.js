@@ -1,6 +1,6 @@
 // abc2svg - deco.js - decorations
 //
-// Copyright (C) 2014-2017 Jean-Francois Moine
+// Copyright (C) 2014-2018 Jean-Francois Moine
 //
 // This file is part of abc2svg-core.
 //
@@ -24,21 +24,21 @@ var	dd_tb = {},		// definition of the decorations
 // standard decorations
 var std_deco = {
 	dot: "0 stc 5 1 1",
-	tenuto: "0 emb 5 2 2",
+	tenuto: "0 emb 5 3 3",
 	slide: "1 sld 3 7 0",
 	arpeggio: "2 arp 12 10 0",
 	roll: "3 roll 7 6 6",
 	fermata: "3 hld 12 7 7",
 	emphasis: "3 accent 7 4 4",
-	lowermordent: "3 lmrd 10 2 2",
+	lowermordent: "3 lmrd 10 5 5",
 	coda: "3 coda 24 10 10",
-	uppermordent: "3 umrd 10 2 2",
+	uppermordent: "3 umrd 10 5 5",
 	segno: "3 sgno 20 8 8",
-	trill: "3 trl 14 4 4",
+	trill: "3 trl 14 5 5",
 	upbow: "3 upb 10 5 5",
 	downbow: "3 dnb 9 5 5",
 	gmark: "3 grm 6 5 5",
-	wedge: "3 wedge 8 1 1",
+	wedge: "3 wedge 8 3 3",		// (staccatissimo or spiccato)
 	turnx: "3 turnx 10 0 5",
 	breath: "3 brth 0 1 20",
 	longphrase: "3 lphr 0 1 1",
@@ -59,10 +59,10 @@ var std_deco = {
 	">": "3 accent 6 4 4",
 	marcato: "3 marcato 9 3 3",
 	"^": "3 marcato 9 3 3",
-	mordent: "3 lmrd 10 2 2",
-	open: "3 opend 10 2 2",
+	mordent: "3 lmrd 10 5 5",
+	open: "3 opend 10 3 3",
 	snap: "3 snap 14 3 3",
-	thumb: "3 thumb 14 2 2",
+	thumb: "3 thumb 14 3 3",
 	"D.C.": "3 dacs 16 10 10 D.C.",
 	"D.S.": "3 dacs 16 10 10 D.S.",
 	fine: "3 dacs 16 10 10 FINE",
@@ -79,7 +79,7 @@ var std_deco = {
 	pp: "6 pf 18 5 14",
 	ppp: "6 pf 18 8 20",
 	pppp: "6 pf 18 10 25",
-	pralltriller: "3 umrd 10 2 2",
+	pralltriller: "3 umrd 10 5 5",
 	sfz: '6 sfz 18 4 10 ""',
 	ped: "4 ped 20 0 0",
 	"ped-up": "4 pedoff 20 0 0",
@@ -555,10 +555,8 @@ function d_upstaff(de) {
 	case "mphr":
 	case "sphr":
 		yc = stafft + 1
-		if (dd.glyph == "brth") {
-			if (yc < s.ymx)
-				yc = s.ymx
-		}
+		if (dd.glyph == "brth" && yc < s.ymx)
+			yc = s.ymx
 		for (s = s.ts_next; s; s = s.ts_next)
 			if (s.shrink)
 				break
@@ -779,7 +777,8 @@ function deco_cnv(a_dcn, s, prev) {
 		case 34:		/* trem1..trem4 */
 			if (s.type != NOTE
 			 || !prev
-			 || prev.type != NOTE) {
+			 || prev.type != NOTE
+			 || s.nflags != prev.nflags) {
 				error(1, s,
 					"!$1! must be on the last of a couple of notes",
 					dd.name)
@@ -792,19 +791,18 @@ function deco_cnv(a_dcn, s, prev) {
 			prev.beam_st = true;
 //			prev.beam_end = false;
 			s.ntrem = prev.ntrem = Number(dd.name[4]);
-			s.nflags--;
-			prev.nflags--
+			prev.nflags = --s.nflags;
+			prev.head = ++s.head
 			if (s.nflags > 0) {
 				s.nflags += s.ntrem;
-				prev.nflags += s.ntrem
 			} else {
 				if (s.nflags <= -2) {
 					s.stemless = true;
 					prev.stemless = true
 				}
 				s.nflags = s.ntrem;
-				prev.nflags = s.ntrem
 			}
+			prev.nflags = s.nflags
 			for (j = 0; j <= s.nhd; j++)
 				s.notes[j].dur *= 2;
 			for (j = 0; j <= prev.nhd; j++)
@@ -1173,6 +1171,12 @@ function draw_deco_near() {
 			}
 
 			switch (dd.func) {
+			case 0:
+			case 1:
+			case 3:
+			case 4:
+				break
+			default:
 			case 2:			// arpeggio
 			case 5:			// trill
 			case 7:			// d_cresc
@@ -1186,6 +1190,9 @@ function draw_deco_near() {
 				continue
 			case 32:		// invisible
 				note.invis = true
+				continue
+			case 40:		// stemless chord (abcm2ps behaviour)
+				s.stemless = true
 				continue
 			}
 
@@ -1356,9 +1363,9 @@ function draw_deco_note() {
 }
 
 // -- define the music elements tied to the staff --
-//	- chord indications
 //	- repeat brackets
 //	- decoration tied to the staves
+//	- chord symbols
 /* (the staves are not yet defined) */
 /* (unscaled delayed output) */
 function draw_deco_staff() {
@@ -1369,10 +1376,10 @@ function draw_deco_staff() {
 
 	/* draw the repeat brackets */
 	function draw_repbra(p_voice) {
-		var s, s1, y, y2, i, p, w, first_repeat;
+		var s, s1, y, y2, i, p, w, wh, first_repeat;
 
 		/* search the max y offset */
-		y = staff_tb[p_voice.st].topbar + 6 + 20;
+		y = staff_tb[p_voice.st].topbar + 25	// 20 (vert bar) + 5 (room)
 		for (s = p_voice.sym; s; s = s.next) {
 			if (s.type != BAR)
 				continue
@@ -1399,9 +1406,9 @@ function draw_deco_staff() {
 
 			/* have room for the repeat numbers */
 			if (s1.text) {
-				w = strw(s1.text);
-				y2 = y_get(p_voice.st, true, s1.x + 4, w);
-				y2 += gene.curfont.size + 2
+				wh = strwh(s1.text);
+				y2 = y_get(p_voice.st, true, s1.x + 4, wh[0]);
+				y2 += wh[1]
 				if (y < y2)
 					y = y2
 			}
@@ -1458,13 +1465,14 @@ function draw_deco_staff() {
 			 && !s.rbstop
 			 && !p_voice.bar_start) { // continue on next line
 				p_voice.bar_start = clone(s);
+				p_voice.bar_start.type = BAR;
 				p_voice.bar_start.bar_type = "["
 				delete p_voice.bar_start.text;
 				p_voice.bar_start.rbstart = 1
 				delete p_voice.bar_start.a_gch
 			}
 			if (s1.text)
-				xy_str(x + 4, y2 - gene.curfont.size * .9,
+				xy_str(x + 4, y2 - gene.curfont.size - 3,
 					s1.text);
 			xypath(x, y2);
 			if (s1.rbstart == 2)
@@ -1480,73 +1488,6 @@ function draw_deco_staff() {
 				s = s.prev
 		}
 	} // draw_repbra()
-
-	/* search the vertical offset for the guitar chords */
-	for (i = 0; i <= nstaff; i++)
-		minmax[i] = {
-			ymin: 0,
-			ymax: 24
-		}
-	for (s = tsfirst; s; s = s.ts_next) {
-		if (!s.a_gch)
-			continue
-		if (!first_gchord)
-			first_gchord = s;
-		gch2 = null
-		for (ix = 0; ix < s.a_gch.length; ix++) {
-			gch = s.a_gch[ix]
-			if (gch.type != 'g')
-				continue
-			gch2 = gch	/* guitar chord closest to the staff */
-			if (gch.y < 0)
-				break
-		}
-		if (gch2) {
-			w = gch2.w
-			if (gch2.y >= 0) {
-				y = y_get(s.st, true, s.x, w)
-				if (y > minmax[s.st].ymax)
-					minmax[s.st].ymax = y
-			} else {
-				y = y_get(s.st, false, s.x, w)
-				if (y < minmax[s.st].ymin)
-					minmax[s.st].ymin = y
-			}
-		}
-	}
-
-	/* draw the chord indications if any */
-	if (first_gchord) {
-		for (i = 0; i <= nstaff; i++) {
-			bot = staff_tb[i].botbar;
-			minmax[i].ymin -= 3
-			if (minmax[i].ymin > bot - 10)
-				minmax[i].ymin = bot - 10
-			top = staff_tb[i].topbar;
-			minmax[i].ymax += 3
-			if (minmax[i].ymax < top + 10)
-				minmax[i].ymax = top + 10
-		}
-		set_sscale(-1)		/* restore the scale parameters */
-		for (s = first_gchord; s; s = s.ts_next) {
-			if (!s.a_gch)
-				continue
-//			switch (s.type) {
-//			case NOTE:
-//			case REST:
-//			case SPACE:
-//			case MREST:
-//			case BAR:
-//--fixme: what when gchord and repeat ?
-//				if (s.text == undefined) // not a repeat bar
-//					break
-//			default:
-//				continue
-//			}
-			draw_gchord(s, minmax[s.st].ymin,
-					minmax[s.st].ymax)
-		}
-	}
 
 	/* draw the repeat brackets */
 	for (v = 0; v < voice_tb.length; v++) {
@@ -1606,6 +1547,59 @@ function draw_deco_staff() {
 			y += dd.h;
 		y_set(de.st, de.up, de.x, de.val, y)
 	}
+
+	// search the vertical offset for the chord symbols
+	for (i = 0; i <= nstaff; i++)
+		minmax[i] = {
+			ymin: 0,
+			ymax: 24
+		}
+	for (s = tsfirst; s; s = s.ts_next) {
+		if (!s.a_gch)
+			continue
+		if (!first_gchord)
+			first_gchord = s;
+		gch2 = null
+		for (ix = 0; ix < s.a_gch.length; ix++) {
+			gch = s.a_gch[ix]
+			if (gch.type != 'g')
+				continue
+			gch2 = gch	// chord closest to the staff
+			if (gch.y < 0)
+				break
+		}
+		if (gch2) {
+			w = gch2.w
+			if (gch2.y >= 0) {
+				y = y_get(s.st, true, s.x, w)
+				if (y > minmax[s.st].ymax)
+					minmax[s.st].ymax = y
+			} else {
+				y = y_get(s.st, false, s.x, w)
+				if (y < minmax[s.st].ymin)
+					minmax[s.st].ymin = y
+			}
+		}
+	}
+
+	// draw the chord symbols if any
+	if (first_gchord) {
+		for (i = 0; i <= nstaff; i++) {
+			bot = staff_tb[i].botbar;
+			if (minmax[i].ymin > bot - 4)
+				minmax[i].ymin = bot - 4
+			top = staff_tb[i].topbar;
+			if (minmax[i].ymax < top + 4)
+				minmax[i].ymax = top + 4
+		}
+		set_sscale(-1)		/* restore the scale parameters */
+		for (s = first_gchord; s; s = s.ts_next) {
+			if (!s.a_gch)
+				continue
+			draw_gchord(s, minmax[s.st].ymin, minmax[s.st].ymax)
+		}
+	}
+
 }
 
 /* -- draw the measure bar numbers -- */
@@ -1639,7 +1633,10 @@ function draw_measnb() {
 			y = y_get(st, true, 0, 20)
 			if (y < staff_tb[st].topbar + 14)
 				y = staff_tb[st].topbar + 14;
-			xy_str(0, y, bar_num.toString());
+			if (cfmt.measurebox)
+				xy_str_b(0, y, bar_num.toString())
+			else
+				xy_str(0, y, bar_num.toString());
 			y_set(st, true, 0, 20, y + gene.curfont.size + 2)
 		} else if (bar_num % cfmt.measurenb == 0) {
 			for ( ; ; s = s.ts_next) {
@@ -1654,6 +1651,9 @@ function draw_measnb() {
 			}
 			while (s.st != st)
 				s = s.ts_next
+
+			// don't display the number twice
+		     if (s.type != BAR || !s.bar_num) {
 			if (s.prev && s.prev.type != CLEF)
 				s = s.prev;
 			x = s.x - s.wl;
@@ -1669,6 +1669,7 @@ function draw_measnb() {
 			y += 2;
 			if (cfmt.measurebox) {
 				xy_str_b(x, y, bar_num.toString());
+				y += 2;
 				w += 3
 			} else {
 				xy_str(x, y, bar_num.toString())
@@ -1676,6 +1677,7 @@ function draw_measnb() {
 			y += gene.curfont.size;
 			y_set(st, true, x, w, y);
 			s.ymx = y
+		     }
 		}
 	}
 
@@ -1727,6 +1729,7 @@ function draw_measnb() {
 		y += 2;
 		if (cfmt.measurebox) {
 			xy_str_b(x, y, bar_num.toString());
+			y += 2;
 			w += 3
 		} else {
 			xy_str(x, y, bar_num.toString())
@@ -1749,17 +1752,15 @@ function draw_notempo(s, x, y, dur, sc) {
 		dots = elts[1],
 		nflags = elts[2]
 
-	// protection against end of container
-	if (stv_g.started) {
-		output.push("</g>\n");
-		stv_g.started = false
-	}
+//useless
+//	// protection against end of container
+//	if (stv_g.started) {
+//		output.push("</g>\n");
+//		stv_g.started = false
+//	}
 
-//	output.push('<g transform="translate(');
-//	out_sxsy(x + 8, ',', y + 3);
-//	output.push(') scale(' + sc + ')">\n')
 	out_XYAB('<g transform="translate(X,Y) scale(F)">\n',
-		x + 4, y + 2, sc)
+		x + 4, y + 5, sc)
 	switch (head) {
 	case OVAL:
 		p = "HD"
@@ -1805,7 +1806,7 @@ function draw_notempo(s, x, y, dur, sc) {
 				dx = 6
 		}
 	}
-	output.push('\n</g>\n')
+	output.push('</g>\n')
 	return (dx + 15) * sc
 }
 
@@ -1815,14 +1816,14 @@ function tempo_width(s) {
 
 	set_font("tempo")
 	if (s.tempo_str1)
-		w = strw(s.tempo_str1)
+		w = strwh(s.tempo_str1)[0]
 	if (s.tempo_ca)
-		w += strw(s.tempo_ca)
+		w += strwh(s.tempo_ca)[0]
 	if (s.tempo_notes)
 		w += 10 * s.tempo_notes.length +
 			6 + cwid(' ') * gene.curfont.swfac * 6 + 10
 	if (s.tempo_str2)
-		w += strw(s.tempo_str2)
+		w += strwh(s.tempo_str2)[0]
 	return w
 }
 
@@ -1834,16 +1835,16 @@ function write_tempo(s, x, y) {
 	set_font("tempo")
 	if (s.tempo_str1) {
 		xy_str(x, y, s.tempo_str1);
-		x += strw(s.tempo_str1) + 3
+		x += strwh(s.tempo_str1)[0] + 3
 	}
 	if (s.tempo_notes) {
 		for (j = 0; j < s.tempo_notes.length; j++)
 			x += draw_notempo(s, x, y, s.tempo_notes[j], sc);
 		xy_str(x, y, "=");
-		x += strw("= ")
+		x += strwh("= ")[0]
 		if (s.tempo_ca) {
 			xy_str(x, y, s.tempo_ca);
-			x += strw(s.tempo_ca) //+ 5
+			x += strwh(s.tempo_ca)[0]
 		}
 		if (s.tempo) {
 			xy_str(x, y, s.tempo.toString());
@@ -1873,7 +1874,7 @@ function draw_partempo(st, top) {
 		ht = 0
 
 	/* get the minimal y offset */
-	var	ymin = staff_tb[st].topbar + 12,
+	var	ymin = staff_tb[st].topbar + 8,
 		dosh = 0,
 		shift = 1,
 		x = 0
@@ -1883,15 +1884,16 @@ function draw_partempo(st, top) {
 		if (!some_tempo)
 			some_tempo = s;
 		w = tempo_width(s);
-		y = y_get(st, true, s.x - 5, w) + 2
+		y = y_get(st, true, s.x - 16, w)
 		if (y > ymin)
 			ymin = y
-		if (x >= s.x - 5 && !(dosh & (shift >> 1)))
+		if (x >= s.x - 16 && !(dosh & (shift >> 1)))
 			dosh |= shift;
 		shift <<= 1;
-		x = s.x - 5 + w
+		x = s.x - 16 + w
 	}
 	if (some_tempo) {
+		set_sscale(-1);
 		set_font("tempo");
 		ht = gene.curfont.size + 2 + 2;
 		y = 2 - ht;
@@ -1907,14 +1909,13 @@ function draw_partempo(st, top) {
 			 || s.del)		// (displayed by %%titleformat)
 				continue
 			if (user.anno_start || user.anno_stop) {
-				s.wl = 5;
-				s.wr = 40;
+				s.wl = 16;
+				s.wr = 30;
 				s.ymn = (dosh & 1) ? h : y;
 				s.ymx = s.ymn + 14;
 				anno_start(s)
 			}
-			/*fixme: cf left shift (-5)*/
-			write_tempo(s, s.x - 5, (dosh & 1) ? h : y);
+			write_tempo(s, s.x - 16, (dosh & 1) ? h : y);
 			anno_stop(s);
 			dosh >>= 1
 		}
@@ -1922,7 +1923,7 @@ function draw_partempo(st, top) {
 
 	/* then, put the parts */
 /*fixme: should reduce vertical space if parts don't overlap tempo...*/
-	ymin = staff_tb[st].topbar + 14
+	ymin = staff_tb[st].topbar + 8
 	for (s = tsfirst; s; s = s.ts_next) {
 		if (s.type != PART)
 			continue
@@ -1932,12 +1933,13 @@ function draw_partempo(st, top) {
 			h = gene.curfont.size + 2 + 2
 						/* + cfmt.partsspace ?? */
 		}
-		w = strw(s.text);
-		y = y_get(st, true, s.x - 10, w + 3) + 5
+		w = strwh(s.text)[0];
+		y = y_get(st, true, s.x - 10, w + 3)
 		if (ymin < y)
 			ymin = y
 	}
 	if (some_part) {
+		set_sscale(-1)
 		if (top < ymin + h + ht)
 			dy = ymin + h + ht - top
 
@@ -1946,7 +1948,7 @@ function draw_partempo(st, top) {
 				continue
 			s.x -= 10;
 			if (user.anno_start || user.anno_stop) {
-				w = strw(s.text);
+				w = strwh(s.text)[0];
 				s.wl = 0;
 				s.wr = w;
 				s.ymn = -ht - h;

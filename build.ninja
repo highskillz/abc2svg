@@ -12,10 +12,11 @@ rule cpm
   command = sed "s+@MAJOR@+$MAJOR+"  $in > $out
 
 rule font
-  command = fontforge -c 'open("font/abc2svg.sfd").generate("abc2svg.woff")';$
+  command = fontforge -c 'open("font/abc2svg.sfd").generate("abc2svg.ttf")';$
+   fontforge -c 'open("font/abc2svg.sfd").generate("abc2svg.woff")';$
    echo "// abc2svg music font" > font.js;$
-   echo -n "var musicfont = 'url(\"data:application/font-woff;base64," >> font.js;$
-   base64 -w 0 abc2svg.woff >> font.js;$
+   echo "var musicfont = 'url(\"data:application/font-ttf;base64,\\" >> font.js;$
+   base64 abc2svg.ttf | sed 's/$$/\\/' >> font.js;$
    echo "\")'" >> font.js
 
 rule jsc
@@ -59,13 +60,34 @@ rule edit
 	sed "s+@MAJOR@+$MAJOR+" $in > $out;$
    fi
 
+# generate all Scc1t2/n.js from sf2-Scc1t2/n.sf2
+rule sf
+  command = for f in sf2-Scc1t2/*.sf2; do $
+   instr=`basename $$f`; $
+   o=$${f#sf2-}; $
+   o=$${o%.sf2}.js; $
+   if [ ! -r $$o -o $$f -nt $$o ]; then $
+   echo '// abc2svg sound font' > $$o; $
+   echo "abcsf2[$${instr%.sf2}] = '\\" >> $$o; $
+   base64 $$f | sed 's/$$/\\/' >> $$o; $
+   echo "'" >> $$o; $
+   fi; $
+   done
+
 build font: font | font/abc2svg.sfd
+build sf: sf | Scc1t2/
 
 build abc2svg-$MAJOR.js: jsc core/abc2svg.js core/deco.js core/draw.js $
  font.js core/format.js core/front.js core/music.js core/parse.js core/subs.js $
- core/svg.js core/tune.js core/lyrics.js core/gchord.js core/tail.js | package.json
+ core/svg.js core/tune.js core/lyrics.js core/gchord.js core/tail.js $
+ core/modules.js | package.json
 
+build ambitus-$MAJOR.js: jscu modules/ambitus.js | package.json
+build capo-$MAJOR.js: jscu modules/capo.js | package.json
+build diag-$MAJOR.js: jscu modules/diag.js | package.json
+build grid-$MAJOR.js: jscu modules/grid.js | package.json
 build psvg-$MAJOR.js: jscu core/wps.js core/psvg.js | package.json
+build MIDI-$MAJOR.js: jscu modules/MIDI.js | package.json
 
 build edit-$MAJOR.css: cp editor/edit.css
 
@@ -74,7 +96,8 @@ build abcemb-$MAJOR.js: jscu util/abcemb.js | package.json
 build follow-$MAJOR.js: jscu util/follow.js | package.json
 build json-$MAJOR.js: jscu util/json.js | package.json
 build midi-$MAJOR.js: jscu util/midi.js | package.json
-build play-$MAJOR.js: jscu util/play.js util/toaudio.js util/toaudio5.js | package.json
+build play-$MAJOR.js: jscu util/play.js util/toaudio.js $
+ util/toaudio5.js util/sf2-parser.js | package.json
 build toaudio-$MAJOR.js: jscu util/toaudio.js | package.json
 
 build edit-$MAJOR.xhtml: cpm editor/edit.xhtml
@@ -85,6 +108,8 @@ build edit-$MAJOR.js: edit editor/edit.js | package.json
 build all: phony abc2svg-$MAJOR.js abcdoc-$MAJOR.js $
  abcemb-$MAJOR.js json-$MAJOR.js midi-$MAJOR.js $
  play-$MAJOR.js toaudio-$MAJOR.js psvg-$MAJOR.js $
+ ambitus-$MAJOR.js capo-$MAJOR.js diag-$MAJOR.js grid-$MAJOR.js $
+ MIDI-$MAJOR.js $
  edit-$MAJOR.css edit-$MAJOR.js edit-$MAJOR.xhtml $
  abckbd-$MAJOR.js abckbd2-$MAJOR.js follow-$MAJOR.js
 

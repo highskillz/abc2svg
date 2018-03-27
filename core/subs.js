@@ -1,6 +1,6 @@
 // abc2svg - subs.js - text output
 //
-// Copyright (C) 2014-2017 Jean-Francois Moine
+// Copyright (C) 2014-2018 Jean-Francois Moine
 //
 // This file is part of abc2svg-core.
 //
@@ -19,13 +19,12 @@
 
 /* width of characters according to the encoding */
 /* these are the widths for Times-Roman, extracted from the 'a2ps' package */
-/*fixme-hack: set 500 to control characters for utf-8*/
 
 var cw_tb = new Float32Array([
-	.500,.500,.500,.500,.500,.500,.500,.500,	// 00
-	.500,.500,.500,.500,.500,.500,.500,.500,
-	.500,.500,.500,.500,.500,.500,.500,.500,	// 10
-	.500,.500,.500,.500,.500,.500,.500,.500,
+	.000,.000,.000,.000,.000,.000,.000,.000,	// 00
+	.000,.000,.000,.000,.000,.000,.000,.000,
+	.000,.000,.000,.000,.000,.000,.000,.000,	// 10
+	.000,.000,.000,.000,.000,.000,.000,.000,
 	.250,.333,.408,.500,.500,.833,.778,.333,	// 20
 	.333,.333,.500,.564,.250,.564,.250,.278,
 	.500,.500,.500,.500,.500,.500,.500,.500,	// 30
@@ -52,12 +51,14 @@ function cwid(c) {
 	return cw_tb[i]
 }
 
-// estimate the width of a string
-function strw(str) {
-	var	swfac = gene.curfont.swfac,
-		w = 0,
-		i, j, c,
-		n = str.length
+// estimate the width and height of a string
+function strwh(str) {
+    var	font = gene.curfont,
+	swfac = font.swfac,
+	h = font.size,
+	w = 0,
+	i, j, c,
+	n = str.length
 
 	for (i = 0; i < n; i++) {
 		c = str[i]
@@ -65,15 +66,17 @@ function strw(str) {
 		case '$':
 			c = str[i + 1]
 			if (c == '0') {
-				gene.curfont = gene.deffont
+				font = gene.deffont
 			} else if (c >= '1' && c <= '9') {
-				gene.curfont = get_font("u" + c)
+				font = get_font("u" + c)
 			} else {
-				w += cwid('$') * swfac
+				c = '$'
 				break
 			}
-			i++
-			swfac = gene.curfont.swfac
+			i++;
+			swfac = font.swfac
+			if (font.size > h)
+				h = font.size
 			continue
 		case '&':
 			j = str.indexOf(';', i)
@@ -85,7 +88,8 @@ function strw(str) {
 		}
 		w += cwid(c) * swfac
 	}
-	return w
+	gene.curfont = font
+	return [w, h]
 }
 
 // set the default and current font
@@ -99,7 +103,7 @@ function out_str(str) {
 		o_font = gene.curfont,
 		c_font = o_font;
 
-	output.push(str.replace(/<|>|&.*?;|&|\$./g, function(c){
+	output.push(str.replace(/<|>|&.*?;|&|  |\$./g, function(c){
 			switch (c[0]) {
 			case '<': return "&lt;"
 			case '>': return "&gt;"
@@ -107,10 +111,13 @@ function out_str(str) {
 				if (c == '&')
 					 return "&amp;"
 				return c
+			case ' ':
+				return '  '		// space + nbspace
 			case '$':
-				if (c[1] == '0')
-					n_font = gene.deffont
-				else if (c[1] >= '1' && c[1] <= '9')
+				if (c[1] == '0') {
+					n_font = gene.deffont;
+					use_font(n_font)
+				} else if (c[1] >= '1' && c[1] <= '9')
 					n_font = get_font("u" + c[1])
 				else
 					return c
@@ -122,8 +129,8 @@ function out_str(str) {
 				c_font = n_font
 				if (c_font == o_font)
 					return c
-				return c + '<tspan\n\tclass="f' +
-					n_font.fid + cfmt.fullsvg + '">'
+				return c + '<tspan\n\tclass="' +
+						font_class(n_font) + '">'
 			}
 		}))
 	if (c_font != o_font) {
@@ -142,7 +149,9 @@ function out_str(str) {
 function xy_str(x, y, str,
 		 action,
 		 line_w) {
-	output.push('<text class="f' + gene.curfont.fid + cfmt.fullsvg + '" x="');
+    var	h = strwh(str)[1];
+	y += h * .2;			// a bit upper for the descent
+	output.push('<text class="' + font_class(gene.curfont) + '" x="');
 	out_sxsy(x, '" y="', y)
 	switch (action) {
 	case 'c':
@@ -170,12 +179,12 @@ function xy_str_b(x, y, str) {
 // outline-width: 1px">\n');
 //	xy_str(x, y, str, action, line_w);
 //	output.push('</g>\n')
-	var	w = strw(str);
+    var	wh = strwh(str);
 
 	output.push('<rect class="stroke" x="');
-	out_sxsy(x - 2, '" y="', y + gene.curfont.size - 2);
-	output.push('" width="' + (w + 4).toFixed(2) +
-		'" height="' + (gene.curfont.size + 3).toFixed(2) +
+	out_sxsy(x - 2, '" y="', y + wh[1] + 1);
+	output.push('" width="' + (wh[0] + 4).toFixed(2) +
+		'" height="' + (wh[1] + 3).toFixed(2) +
 		'"/>\n');
 	xy_str(x, y, str)
 }
@@ -186,10 +195,16 @@ function trim_title(title, is_subtitle) {
 
 	if (cfmt.titletrim) {
 		i = title.lastIndexOf(", ")
-		if (i < 0 || title[i + 2] < 'A' || title[i + 2] > 'Z'
-		 || i < title.length - 7	// word no more than 5 characters
-		 || title.indexOf(' ', i + 3) >= 0)
+		if (i < 0 || title[i + 2] < 'A' || title[i + 2] > 'Z') {
 			i = 0
+		} else if (cfmt.titletrim == true) {	// compatibility
+			if (i < title.length - 7
+			 || title.indexOf(' ', i + 3) >= 0)
+				i = 0
+		} else {
+			if (i < title.length - cfmt.titletrim - 2)
+				i = 0
+		}
 	}
 	if (!is_subtitle
 	 && cfmt.writefields.indexOf('X') >= 0)
@@ -210,7 +225,7 @@ function get_lwidth() {
 
 // header generation functions
 function write_title(title, is_subtitle) {
-	var font, sz
+    var	font, h
 
 	if (!title)
 		return
@@ -218,17 +233,16 @@ function write_title(title, is_subtitle) {
 	title = trim_title(title, is_subtitle)
 	if (is_subtitle) {
 		set_font("subtitle");
-		sz = gene.curfont.size;
-		vskip(cfmt.subtitlespace + sz)
+		h = cfmt.subtitlespace
 	} else {
 		set_font("title");
-		sz = gene.curfont.size;
-		vskip(cfmt.titlespace + sz)
+		h = cfmt.titlespace
 	}
+	vskip(strwh(title)[1] + h)
 	if (cfmt.titleleft)
-		xy_str(0, sz * .2, title)
+		xy_str(0, 0, title)
 	else
-		xy_str(get_lwidth() / 2, sz * .2, title, "c")
+		xy_str(get_lwidth() / 2, 0, title, "c")
 }
 
 /* -- output a header format '111 (222)' -- */
@@ -245,6 +259,11 @@ function put_inf2r(x, y, str1, str2, action) {
 		xy_str(x, y, str1 + ' (' + str2 + ')', action)
 }
 
+// let vertical room for a text line
+function str_skip(str) {
+	vskip(strwh(str)[1] * cfmt.lineskipfac)
+}
+
 /* -- write a text block (%%begintext / %%text / %%center) -- */
 function write_text(text, action) {
 	if (action == 's')
@@ -252,9 +271,14 @@ function write_text(text, action) {
 	set_font("text");
 	set_page();
 	var	strlw = get_lwidth(),
-		lineskip = gene.curfont.size * cfmt.lineskipfac,
-		parskip = gene.curfont.size * cfmt.parskipfac,
-		i, j, x, words, w, k, ww
+		sz = gene.curfont.size,
+		lineskip = sz * cfmt.lineskipfac,
+		parskip = sz * cfmt.parskipfac,
+		p_start = block.started ? function(){} : blk_out,
+		p_flush = block.started ? svg_flush : blk_flush,
+		i, j, x, words, w, k, ww, str;
+
+	p_start()
 	switch (action) {
 	default:
 //	case 'c':
@@ -268,27 +292,31 @@ function write_text(text, action) {
 		while (1) {
 			i = text.indexOf('\n', j)
 			if (i < 0) {
-				vskip(lineskip);
-				xy_str(x, 0, text.slice(j), action)
+				str = text.slice(j);
+				str_skip(str);
+				xy_str(x, 0, str, action)
 				break
 			}
 			if (i == j) {			// new paragraph
 				vskip(parskip);
-				blk_out()
+				p_flush();
+				use_font(gene.curfont)
 				while (text[i + 1] == '\n') {
 					vskip(lineskip);
 					i++
 				}
 				if (i == text.length)
 					break
+				p_start()
 			} else {
-				vskip(lineskip);
-				xy_str(x, 0, text.slice(j, i), action)
+				str = text.slice(j, i);
+				str_skip(str);
+				xy_str(x, 0, str, action)
 			}
 			j = i + 1
 		}
 		vskip(parskip);
-		blk_out()
+		p_flush()
 		break
 	case 'f':
 	case 'j':
@@ -302,23 +330,23 @@ function write_text(text, action) {
 			words = words.split(/\s+/);
 			w = k = 0
 			for (j = 0; j < words.length; j++) {
-				ww = strw(words[j] + ' ');
+				ww = strwh(words[j] + ' ')[0];
 				w += ww
 				if (w >= strlw) {
-					vskip(lineskip);
-					xy_str(0, 0,
-						words.slice(k, j).join(' '),
-						action, strlw);
+					str = words.slice(k, j).join(' ');
+					str_skip(str);
+					xy_str(0, 0, str, action, strlw);
 					k = j;
 					w = ww
 				}
 			}
 			if (w != 0) {
-				vskip(lineskip);
-				xy_str(0, 0, words.slice(k).join(' '))
+				str = words.slice(k).join(' ');
+				str_skip(str);
+				xy_str(0, 0, str)
 			}
 			vskip(parskip);
-			blk_out()
+			p_flush()
 			if (i < 0)
 				break
 			while (text[i + 2] == '\n') {
@@ -327,6 +355,8 @@ function write_text(text, action) {
 			}
 			if (i == text.length)
 				break
+			p_start();
+			use_font(gene.curfont);
 			j = i + 2
 		}
 		break
@@ -415,11 +445,12 @@ function put_words(words) {
 	vskip(cfmt.wordsspace)
 
 	for (i = 0; i < i_end || i2 < nw; i++) {
-		var desc = gene.curfont.size * .2
 //fixme:should also permit page break on stanza start
-		if (i < i_end && words[i].length == 0)
+		if (i < i_end && words[i].length == 0) {
 			blk_out();
-		vskip(cfmt.lineskipfac * gene.curfont.size - desc)
+			use_font(gene.curfont)
+		}
+		vskip(cfmt.lineskipfac * gene.curfont.size)
 		if (i < i_end)
 			put_wline(words[i], 45., 0)
 		if (i2 < nw) {
@@ -437,7 +468,6 @@ function put_words(words) {
 			}
 			i2++
 		}
-		vskip(desc)
 	}
 }
 
@@ -465,7 +495,7 @@ function put_history() {
 			head = head.slice(1, -1);
 		vskip(h);
 		xy_str(0, 0, head);
-		w = strw(head);
+		w = strwh(head)[0];
 		str = str.split('\n');
 		xy_str(w, 0, str[0])
 		for (j = 1; j < str.length; j++) {
@@ -473,7 +503,8 @@ function put_history() {
 			xy_str(w, 0, str[j])
 		}
 		vskip(h * .3);
-		blk_out()
+		blk_out();
+		use_font(gene.curfont)
 	}
 }
 
@@ -684,6 +715,7 @@ function write_heading() {
 	var	i, j, area, composer, origin, rhythm, down1, down2,
 		lwidth = get_lwidth()
 
+	blk_out();
 	vskip(cfmt.topspace)
 
 	if (cfmt.titleformat) {
@@ -793,65 +825,4 @@ function write_heading() {
 		down2 = 0
 	}
 	vskip(down2 + cfmt.musicspace)
-}
-
-// generate a header/footer
-// (this function is not called from the core)
-// return an array of [left, center, right] texts
-Abc.prototype.header_footer = function(str) {
-	var	c, i,
-		j = 0,
-		r = ["", "", ""]
-
-	if (str[0] == '"')
-		str = str.slice(1, -1)
-	if (str.indexOf('\t') < 0)		// if no TAB
-		str = '\t' + str		// center
-	for (i = 0; i < str.length; i++) {
-		c = str[i]
-		switch (c) {
-		case '\t':
-			if (j < 2)
-				j++
-			continue
-		case '\\':			// hope '\n'
-			for (j = 0; j < 3; j++) {
-				if (r[j])
-					r[j] += '\n'
-			}
-			j = 0;
-			i++
-			continue
-		default:
-			r[j] += c
-			continue
-		case '$':
-			break
-		}
-		c = str[++i]
-		switch (c) {
-		case 'd':	// cannot know the modification date of the file
-			break
-		case 'D':
-			var now = new Date();
-			r[j] += now.toUTCString()
-			break
-		case 'F':
-			r[j] += parse.ctx.fname
-			break
-		case 'I':
-			c = str[++i]
-		case 'T':
-			if (info[c])
-				r[j] += info[c]
-			break
-		case 'P':
-			r[j] += '\x0c'	// form feed
-			break
-		case 'V':
-			r[j] += "abc2svg-" + abc2svg.version
-			break
-		}
-	}
-	return r
 }

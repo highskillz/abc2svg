@@ -1,6 +1,6 @@
 // abc2svg - cmdline.js - command line
 //
-// Copyright (C) 2014-2017 Jean-Francois Moine
+// Copyright (C) 2014-2018 Jean-Francois Moine
 //
 // This file is part of abc2svg.
 //
@@ -17,36 +17,30 @@
 // You should have received a copy of the GNU General Public License
 // along with abc2svg.  If not, see <http://www.gnu.org/licenses/>.
 
-// global variables
-var errtxt = ''
-
-// -- replace the exotic end of lines by standard ones
-function set_eoln(file) {
-	var i = file.indexOf('\r')
-	if (i < 0)
-		return undefined	// standard
-	if (file[i + 1] == '\n')
-		return file.replace(/\r\n/g, '\n')	// M$
-	return file.replace(/\r/g, '\n')		// Mac
-}
-
-// -- abc2svg init argument
+// user definitions
 var user = {
 	read_file: function(fn) {	// include a file (%%abc-include)
 		var	file = readFile(fn),
-			file2 = set_eoln(file)
-		return file2 || file
+		i = file.indexOf('\r')
+
+		if (i < 0)
+			return file	// standard
+		if (file[i + 1] == '\n')
+			return file.replace(/\r\n/g, '\n')	// M$
+		return file.replace(/\r/g, '\n')		// Mac
 	},
-	errmsg: function(msg, l, c) {	// get the errors
-		if (typeof printErr == 'function')
-			printErr(msg)
-		else
-			errtxt += msg + '\n'
-	}
+	errtxt: ''
 }
+
+	// print or store the error messages
+	if (typeof printErr == 'function')
+		user.errmsg = function(msg, l, c) { printErr(msg) }
+	else
+		user.errmsg = function(msg, l, c) { user.errtxt += msg + '\n' }
 
 var	abc = new Abc(user)		// (global for 'toxxx.js')
 
+// treat a file
 function do_file(fn) {
 	var	file = user.read_file(fn)
 
@@ -65,23 +59,30 @@ function do_file(fn) {
 //	if (typeof(utf_convert) == "function")
 //		file = utf_convert(file)
 
-	// if some Postscript definition, load the interpreter
-	if (file.indexOf('%%beginps') >= 0 && typeof Psvg != "function") {
-		loadRelativeToScript('psvg-1.js');
-		abc.ps_def(abc)
-	}
+	// load the required modules
+	if (modules)
+		modules.load(file, abc)
+
+	// generate
 	try {
 		abc.tosvg(fn, file)
-	}
-	catch (e) {
+	} catch (e) {
 		abort(e)
 	}
-}
+} // do_file()
 
 function abc_cmd(cmd, args) {
 	var	arg, parm, fn;
 
-	abc_init()
+	// load 'default.abc'
+	try {
+		arg = user.read_file('default.abc');
+		abc.tosvg(cmd, arg)
+	} catch (e) {
+	}
+
+	// initialize the backend
+	abc_init(args)
 	while (1) {
 		arg = args.shift()
 		if (!arg)
@@ -89,8 +90,10 @@ function abc_cmd(cmd, args) {
 		if (arg[0] == "-") {
 			if (arg[1] == "-") {
 				parm = args.shift();
-				abc.tosvg(cmd, arg.replace('--', 'I:') +
-						" " + parm + "\n")
+				parm = arg.replace('--', 'I:') + " " + parm + "\n"
+				if (modules)
+					modules.load(parm, abc);
+				abc.tosvg(cmd, parm)
 			}
 		} else {
 			if (fn) {
@@ -109,7 +112,6 @@ function abc_cmd(cmd, args) {
 // nodejs
 if (typeof module == 'object' && typeof exports == 'object') {
 	exports.abc = abc;
-	exports.errtxt = errtxt;
 	exports.user = user;
 	exports.abc_cmd = abc_cmd
 }

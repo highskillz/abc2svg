@@ -1,6 +1,6 @@
 // abc2svg - tune.js - tune generation
 //
-// Copyright (C) 2014-2017 Jean-Francois Moine
+// Copyright (C) 2014-2018 Jean-Francois Moine
 //
 // This file is part of abc2svg-core.
 //
@@ -155,7 +155,7 @@ var w_tb = new Uint8Array([
 
 function sort_all() {
 	var	s, s2, p_voice, v, time, w, wmin, ir, multi,
-		prev, nb,
+		prev, nb, ir2, v2, sy,
 		nv = voice_tb.length,
 		vtb = [],
 		vn = [],			/* voice indexed by range */
@@ -165,15 +165,13 @@ function sort_all() {
 		vtb.push(voice_tb[v].sym)
 
 	/* initialize the voice order */
-	var	fl = 1,
-		sy = cur_sy,
-		sy_w = 0,
-		sy_time = 0,
-		new_sy = 1
+	var	fl = 1,				// start a new time sequence
+		new_sy = cur_sy
 
 	while (1) {
 		if (new_sy && fl) {
-			new_sy = false;
+			sy = new_sy;
+			new_sy = null;
 			multi = -1;
 			vn = []
 			for (v = 0; v < nv; v++) {
@@ -215,13 +213,8 @@ function sort_all() {
 			}
 		}
 
-		if (wmin > 127) {
-			if (new_sy && !fl) {	// if %%score with no common voice
-				fl = 1
-				continue
-			}
+		if (wmin > 127)
 			break			// done
-		}
 
 		/* if some multi-rest and many voices, expand */
 		if (time == mrest_time) {
@@ -257,17 +250,6 @@ function sort_all() {
 			}
 		}
 
-		// continue the time sequence after STAVES
-		if (sy_w) {
-			if (sy_w < 0) {		// init
-				sy_w = wmin
-			} else if (sy_time == time && sy_w == wmin) {
-				fl = 0
-			} else {
-				sy_w = 0
-			}
-		}
-
 		/* link the vertical sequence */
 		for (ir = 0; ir < nv; ir++) {
 			v = vn[ir]
@@ -278,10 +260,23 @@ function sort_all() {
 			 || w_tb[s.type] != wmin)
 				continue
 			if (s.type == STAVES) {
-				sy = s.sy;
-				new_sy = true;
-				sy_w = -1;
-				sy_time = s.time
+				new_sy = s.sy;
+
+				// set all voices of previous and next staff systems
+				// as reachable
+				for (ir2 = 0; ir2 < nv; ir2++) {
+					if (vn[ir2] == undefined)
+						break
+				}
+				for (v2 = 0; v2 < nv; v2++) {
+					if (!new_sy.voices[v2])
+						continue
+					ir = new_sy.voices[v2].range
+					if (ir < 0
+					 || sy.voices[v2].range >= 0)
+						continue
+					vn[ir2++] = v2
+				}
 			}
 			if (fl) {
 				fl = 0;
@@ -632,7 +627,7 @@ function do_clip() {
 
 /* -- set the bar numbers and treat %%clip / %%break -- */
 function set_bar_num() {
-	var	s, s2, tim,
+	var	s, s2, tim, bar_time, bar_num, rep_dtime,
 		v = cur_sy.top_voice,
 		wmeasure = voice_tb[v].meter.wmeasure,
 		bar_rep = gene.nbar
@@ -670,6 +665,7 @@ function set_bar_num() {
 			return
 		switch (s.type) {
 		case METER:
+			wmeasure = s.wmeasure
 		case CLEF:
 		case KEY:
 		case STBRK:
@@ -694,8 +690,8 @@ function set_bar_num() {
 	}
 
 	// set the measure number on the top bars
-	var	bar_time = s.time + wmeasure, // for incomplete measure at start of tune
-		bar_num = gene.nbar
+	bar_time = s.time + wmeasure; // for incomplete measure at start of tune
+	bar_num = gene.nbar
 
 	for ( ; s; s = s.ts_next) {
 		switch (s.type) {
@@ -713,33 +709,43 @@ function set_bar_num() {
 		case BAR:
 			if (s.bar_num) {
 				bar_num = s.bar_num		/* (%%setbarnb) */
-				if (s.time < bar_time) {
+				if (s.time < bar_time)
 					delete s.bar_num
-					break
+			}
+			if (s.time < bar_time) {	// incomplete measure
+				if (s.text && s.text[0] == '1') {
+					bar_rep = bar_num;
+					rep_dtime = bar_time - s.time
 				}
-			} else {
-				if (s.time < bar_time)	/* incomplete measure */
-					break
-				bar_num++
+				break
 			}
 
 			/* check if any repeat bar at this time */
 			tim = s.time;
 			s2 = s
 			do {
-				if (s2.type == BAR
-				 && s2.text		// if repeat bar
-				 && !cfmt.contbarnb) {
-					if (s2.text[0] == '1')
-						bar_rep = bar_num
-					else		/* restart bar numbering */
-						bar_num = bar_rep
+				if (s2.dur)
 					break
-				}
+				if (s2.type == BAR && s2.text)	// if repeat bar
+					break
 				s2 = s2.next
 			} while (s2 && s2.time == tim);
+			bar_num++
+			if (s2 && s2.type == BAR && s2.text) {
+				if (s2.text[0] == '1') {
+					rep_dtime = 0;
+					bar_rep = bar_num - 1
+				} else {			// restart bar numbering
+					if (!cfmt.contbarnb)
+						bar_num = bar_rep
+					if (rep_dtime) {
+						bar_time = tim + rep_dtime
+						break
+					}
+				}
+			}
 			s.bar_num = bar_num;
-			bar_time = s.time + wmeasure
+			bar_time = tim + wmeasure
 			break
 		}
 	}
@@ -875,33 +881,6 @@ function get_map(text) {
 	}
 }
 
-// %%MIDI
-function get_midi(param) {
-	var	chan, prog,
-		a = param.split(/\s+/)
-
-	switch (a[0]) {
-	case "program":
-		if (a[2]) {		// channel program
-			chan = a[1];
-			prog = a[2]
-		} else {		// program
-			chan = 0;
-			prog = a[1]
-		}
-		prog = parseInt(prog)
-		if (isNaN(prog) || prog < 0 || prog > 127) {
-			syntax(1, "Bad program in %%MIDI")
-			return
-		}
-		if (curvoice)
-			curvoice.instr = prog
-		else
-			glovar.instr = prog
-		break
-	}
-}
-
 // set the transposition in the previous or starting key
 function set_transp() {
 	var	s, transp, vtransp
@@ -1017,9 +996,6 @@ function do_pscom(text) {
 	case "linebreak":
 		set_linebreak(param)
 		return
-	case "MIDI":
-		get_midi(param)
-		return
 	case "map":
 		get_map(param)
 		return
@@ -1065,7 +1041,7 @@ function do_pscom(text) {
 			cfmt.leftmargin = multicol.lmarg;
 			cfmt.rightmargin = multicol.rmarg;
 			multicol = undefined;
-			blk_out();
+			blk_flush();
 			img.chg = true;
 			set_page()
 			break
@@ -1181,12 +1157,13 @@ function do_pscom(text) {
 			s.sk2 = h2
 			return
 		}
+		blk_out();
 		vskip(h1);
 		output.push('<path class="stroke"\n\td="M');
 		out_sxsy((lwidth - len) / 2 / cfmt.scale, ' ', 0);
 		output.push('h' + (len / cfmt.scale).toFixed(2) + '"/>\n');
 		vskip(h2);
-		blk_out()
+		blk_flush()
 		return
 	case "setbarnb":
 		val = parseInt(param)
@@ -1243,18 +1220,8 @@ function do_pscom(text) {
 		sym_link(s)
 		return
 	case "stafflines":
-		val = get_st_lines(param)
-		if (val == undefined)
-			syntax(1, "Bad %%stafflines value")
-		else
-			set_v_param(cmd, val)
-		return
 	case "staffscale":
-		val = parseFloat(param)
-		if (isNaN(val) || val < .3 || val > 2)
-			syntax(1, "Bad %%staffscale value")
-		else
-			set_v_param(cmd, val)
+		set_v_param(cmd, param)
 		return
 	case "staves":
 	case "score":
@@ -1335,7 +1302,6 @@ function do_pscom(text) {
 			return
 		}
 		vskip(val);
-		blk_out()
 		return
 	case "newpage":
 	case "leftmargin":
@@ -1352,7 +1318,7 @@ function do_pscom(text) {
 		}
 		if (cmd == "newpage") {
 			blk_flush();
-			block.newpage = true
+			block.newpage = true;
 			return
 		}
 		break
@@ -1373,7 +1339,7 @@ function do_begin_end(type,
 			psvg.ps_eval(text)
 		break
 	case "js":
-		eval(text)
+		js_inject(text)
 		break
 	case "ml":
 		if (parse.state >= 2) {
@@ -1412,10 +1378,12 @@ function do_begin_end(type,
 		break
 	case "text":
 		action = get_textopt(opt);
+		if (!action)
+			action = cfmt.textoption
 		if (parse.state >= 2) {
 			s = new_block(type);
 			s.text = cnv_escape(text);
-			s.opt = get_textopt(opt)
+			s.opt = action
 			break
 		}
 		write_text(cnv_escape(text), action)
@@ -1426,6 +1394,11 @@ function do_begin_end(type,
 /* -- generate a piece of tune -- */
 function generate() {
 	var v, p_voice;
+
+	if (vover) {
+		syntax(1, "No end of voice overlay");
+		get_vover(vover.bar ? '|' : ')')
+	}
 
 	if (voice_tb.length == 0)
 		return
@@ -1442,10 +1415,8 @@ function generate() {
 	if (user.get_abcmodel)
 		user.get_abcmodel(tsfirst, voice_tb, anno_type, info)
 
-	if (!user.img_out)
-		return			// no SVG generation
-
-	output_music()
+	if (user.img_out)		// if SVG generation
+		output_music()
 
 	/* reset the parser */
 	for (v = 0; v < voice_tb.length; v++) {
@@ -1483,7 +1454,7 @@ function key_transp(s_key) {
 		break
 	}
 	s_key.k_sf = sf;
-	s_key.k_delta = (cgd2cde[(sf + 7) % 7] + 14) % 7
+	s_key.k_delta = cgd2cde[(sf + 7) % 7]
 }
 
 /* -- set the accidentals when K: with modified accidentals -- */
@@ -1639,23 +1610,7 @@ function get_staves(cmd, parm) {
 			dur: 0
 		}
 
-		// put the staves before a measure bar (see draw_bar())
-		var s2 = curvoice.last_sym
-		if (s2 && s2.type == BAR && s2.time == maxtime) {
-			curvoice.last_sym = s2.prev
-			if (!s2.prev)
-				curvoice.sym = s2.prev;	// null
-			sym_link(s);
-			s.next = s2;
-			s2.prev = s;
-			curvoice.last_sym = s2
-			if (s2.eoln) {
-				s.eoln = true;
-				delete s2.eoln
-			}
-		} else {
-			sym_link(s)	// link the staves in this voice
-		}
+		sym_link(s);		// link the staves in this voice
 		par_sy.nstaff = nstaff;
 		new_syst();
 		s.sy = par_sy
@@ -1849,7 +1804,7 @@ function get_vover(type) {
 		}
 		curvoice.last_note.beam_end = true
 		if (!vover) {
-			syntax(1, "Erroneous end of voice overlap")
+			syntax(1, "Erroneous end of voice overlay")
 			return
 		}
 		if (curvoice.time != vover.mxtime)
@@ -1865,7 +1820,8 @@ function get_vover(type) {
 			syntax(1, "Voice overlay already started")
 			return
 		}
-		vover = {			// no voice yet
+		vover = {
+			p_voice: curvoice,
 			time: curvoice.time
 		}
 		return
@@ -1926,12 +1882,10 @@ function get_vover(type) {
 		}
 		vover.time = s.time
 	} else {
-		if (!vover.p_voice) {		// first '&' in '(&' sequence
-			vover.mxtime = curvoice.time;
-			vover.p_voice = curvoice
-		} else if (curvoice.time != vover.mxtime) {
+		if (!vover.mxtime)		// first '&' in '(&' sequence
+			vover.mxtime = curvoice.time
+		else if (curvoice.time != vover.mxtime)
 			syntax(1, "Wrong duration in voice overlay")
-		}
 	}
 	p_voice2.time = vover.time;
 	curvoice = p_voice2
@@ -1945,18 +1899,9 @@ function is_voice_sig() {
 		return true	// new voice (may appear in the middle of a tune)
 	if (curvoice.time != 0)
 		return false
-	for (s = curvoice.sym; s; s = s.next) {
-		switch (s.type) {
-		case BLOCK:
-		case REMARK:
-		case STAVES:
-		case TEMPO:
-		case PART:
-			break
-		default:
+	for (s = curvoice.last_sym; s; s = s.prev)
+		if (w_tb[s.type] != 0)
 			return false
-		}
-	}
 	return true
 }
 
@@ -1971,7 +1916,12 @@ function get_clef(s) {
 
 	// clef change
 	/* the clef must appear before a key signature or a bar */
-	s2 = curvoice.last_sym
+	for (s2 = curvoice.last_sym;
+	     s2 && s2.prev && s2.time == curvoice.time;
+	     s2 = s2.prev) {
+		if (w_tb[s2.type] != 0)
+			break
+	}
 	if (s2 && s2.prev
 	 && s2.time == curvoice.time		// if no time skip
 	 && ((s2.type == KEY && !s2.k_none) || s2.type == BAR)) {
@@ -1983,6 +1933,7 @@ function get_clef(s) {
 			}
 			break
 		}
+		s2 = curvoice.last_sym;
 		curvoice.last_sym = s3.prev;
 		sym_link(s);
 		s.next = s3;
@@ -2015,7 +1966,7 @@ function get_key(parm) {
 		}
 		for (v = 0; v < voice_tb.length; v++) {
 			p_voice = voice_tb[v];
-			p_voice.key = s_key;
+			p_voice.key = clone(s_key);
 			p_voice.okey = clone(s_key);
 			p_voice.ckey = clone(s_key)
 		}
@@ -2087,11 +2038,11 @@ function new_voice(id) {
 	var	p_voice, v, p_v_sav,
 		n = voice_tb.length
 
-	// if first explicit voice and no symbol, replace the default V:1
+	// if first explicit voice and no music, replace the default V:1
 	if (n == 1
 	 && voice_tb[0].default) {
-		voice_tb[0].default = false
-		if (!voice_tb[0].last_sym) {
+		delete voice_tb[0].default
+		if (voice_tb[0].time == 0) {
 			p_voice = voice_tb[0];
 			p_voice.id = id
 			if (cfmt.transp	// != undefined
@@ -2113,7 +2064,8 @@ function new_voice(id) {
 	p_voice = {
 		v: v,
 		id: id,
-//		time: 0,	// used to know if new voice
+		time: 0,
+		new: true,
 		pos: {
 			dyn: 0,
 			gch: 0,
@@ -2140,8 +2092,7 @@ function new_voice(id) {
 			clef_type: "a",		// auto
 			time: 0
 		},
-		hy_st: 0,
-		instr: glovar.instr || 0	// MIDI instrument
+		hy_st: 0
 	}
 
 	voice_tb.push(p_voice);
@@ -2190,8 +2141,8 @@ function get_voice(parm) {
 	set_transp();
 
 	v = curvoice.v
-	if (curvoice.time == undefined) {	// if new voice
-		curvoice.time = 0
+	if (curvoice.new) {			// if new voice
+		delete curvoice.new
 		if (staves_found < 0) {		// if no %%score/%%staves
 			curvoice.st = curvoice.cst = ++nstaff;
 			par_sy.nstaff = nstaff;
@@ -2237,7 +2188,6 @@ function goto_tune(is_K) {
 		curvoice.clef.istart = curvoice.key.istart;
 		curvoice.clef.iend = curvoice.key.iend;
 //		nstaff = 0;
-//		curvoice.time = 0;
 		curvoice.default = true
 	} else if (!curvoice) {
 		curvoice = voice_tb[staves_found < 0 ? 0 : par_sy.top_voice]
@@ -2264,8 +2214,7 @@ function goto_tune(is_K) {
 		nstaff = voice_tb.length - 1
 		for (v = 0; v <= nstaff; v++) {
 			p_voice = voice_tb[v];
-			p_voice.time = 0;		// old voice
-			p_voice.clef.time = 0;
+			delete p_voice.new;		// old voice
 			p_voice.st = p_voice.cst =
 				par_sy.voices[v].st =
 					par_sy.voices[v].range = v;

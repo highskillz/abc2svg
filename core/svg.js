@@ -1,6 +1,6 @@
 // abc2svg - svg.js - svg functions
 //
-// Copyright (C) 2014-2017 Jean-Francois Moine
+// Copyright (C) 2014-2018 Jean-Francois Moine
 //
 // This file is part of abc2svg-core.
 //
@@ -20,8 +20,6 @@
 var	output = [],		// output buffer
 	style = '\n.fill {fill: currentColor}\
 \n.stroke {stroke: currentColor; fill: none}\
-\ntext {white-space: pre}\
-\n.music {font-family: music; font-size: 24px; fill: currentColor}\
 \n.music text, .music tspan {fill:currentColor}',
 	font_style = '',
 	posx = cfmt.leftmargin / cfmt.scale,	// default x offset of the images
@@ -34,6 +32,7 @@ var	output = [],		// output buffer
 	},
 	defined_glyph = {},
 	defs = '',
+	fulldefs = '',		// unreferenced defs as <filter>
 	stv_g = {		/* staff/voice graphic parameters */
 		scale: 1,
 		dy: 0,
@@ -46,7 +45,8 @@ var	output = [],		// output buffer
 
 // glyphs in music font
 var tgls = {
-  sgno: {x: -6, y:4, c:"\ue047"},
+  brace: {x:0, y:0, c:"\ue000"},
+  sgno: {x:-6, y:4, c:"\ue047"},
   coda: {x:-12, y:6, c:"\ue048"},
   tclef: {x:-8, y:0, c:"\ue050"},
   cclef: {x:-8, y:0, c:"\ue05c"},
@@ -55,6 +55,19 @@ var tgls = {
   stclef: {x:-8, y:0, c:"\ue07a"},
   scclef: {x:-8, y:0, c:"\ue07b"},
   sbclef: {x:-7, y:0, c:"\ue07c"},
+  meter0: {c:"\ue080"},
+  meter1: {c:"\ue081"},
+  meter2: {c:"\ue082"},
+  meter3: {c:"\ue083"},
+  meter4: {c:"\ue084"},
+  meter5: {c:"\ue085"},
+  meter6: {c:"\ue086"},
+  meter7: {c:"\ue087"},
+  meter8: {c:"\ue088"},
+  meter9: {c:"\ue089"},
+  "meter+": {c:"\ue08c"},
+  "meter(": {c:"\ue094"},
+  "meter)": {c:"\ue095"},
   csig: {x:0, y:0, c:"\ue08a"},
   ctsig: {x:0, y:0, c:"\ue08b"},
   HDD: {x:-7, y:0, c:"\ue0a0"},
@@ -62,17 +75,21 @@ var tgls = {
   HD: {x:-5.2, y:0, c:"\ue0a2"},
   Hd: {x:-3.8, y:0, c:"\ue0a3"},
   hd: {x:-3.7, y:0, c:"\ue0a4"},
+  ghd: {x:2, y:0, c:"\ue0a4", sc:.66},
+  pshhd: {x:-3.7, y:0, c:"\ue0a9"},
+  pfthd: {x:-3.7, y:0, c:"\ue0b3"},
   srep: {x:-5, y:0, c:"\ue101"},
   dot: {x:-2, y:0, c:"\ue1e7"},
  "acc-1": {x:-3, y:0, c:"\ue260"},
   acc3: {x:-2, y:0, c:"\ue261"},
   acc1: {x:-3, y:0, c:"\ue262"},
   acc2: {x:-3, y:0, c:"\ue263"},
-  pshhd: {x:-3, y:0, c:"\ue263"},
  "acc-2": {x:-3, y:0, c:"\ue264"},
+ "acc-1_1_4": {x:-3, y:0, c:"\ue280"},
   accent: {x:-3, y:0, c:"\ue4a0"},
   marcato: {x:-3, y:0, c:"\ue4ac"},
   hld: {x:-7, y:0, c:"\ue4c0"},
+  brth: {x:0, y:0, c:"\ue4ce"},
   r00: {x:-1.5, y:0, c:"\ue4e1"},
   r0: {x:-1.5, y:0, c:"\ue4e2"},
   r1: {x:-3.5, y:6, c:"\ue4e3"},
@@ -87,6 +104,7 @@ var tgls = {
   mrep: {x:-6, y:0, c:"\ue500"},
   mrep2: {x:-9, y:0, c:"\ue501"},
   turn: {x:-5, y:4, c:"\ue567"},
+  turnx: {x:-5, y:4, c:"\ue569"},
   umrd: {x:-7, y:2, c:"\ue56c"},
   lmrd: {x:-7, y:2, c:"\ue56d"},
   ped: {x:-10, y:0, c:"\ue650"},
@@ -96,10 +114,6 @@ var tgls = {
 
 // glyphs to put in <defs>
 var glyphs = {
-  brace: '<text id="brace">\ue000</text>',
-  ghd: '<g id="ghd" transform="translate(4.5,0) scale(0.66)">\n\
-	<text x="-3.7">\ue0a4</text>\n\
-</g>',
   acc1_1_4: '<g id="acc1_1_4">\n\
 	<path d="m0 7.8v-15.4" class="stroke"/>\n\
 	<path class="fill" d="M-1.8 2.7l3.6 -1.1v2.2l-3.6 1.1v-2.2z\n\
@@ -110,22 +124,11 @@ var glyphs = {
 	<path class="fill" d="m-3.7 3.1l7.4 -2.2v2.2l-7.4 2.2v-2.2z\n\
 		M-3.7 -3.2l7.4 -2.2v2.2l-7.4 2.2v-2.2"/>\n\
 </g>',
- "acc-1_1_4": '<g id="acc-1_1_4" transform="scale(-1,1)">\n\
-	<text x="-3">\ue260</text>\n\
-</g>',
  "acc-1_3_4": '<g id="acc-1_3_4">\n\
     <path class="fill" d="m0.6 -2.7\n\
 	c-5.7 -3.1 -5.7 3.6 0 6.7c-3.9 -4 -4 -7.6 0 -5.8\n\
 	M1 -2.7c5.7 -3.1 5.7 3.6 0 6.7c3.9 -4 4 -7.6 0 -5.8"/>\n\
     <path d="m1.6 3.5v-13M0 3.5v-13" class="stroke" stroke-width=".6"/>\n\
-</g>',
-  turnx: '<g id="turnx">\n\
-	<text x="-5" y="-4">\ue567</text>\n\
-	<path class="stroke" d="m0 -1.5v-9"/>\n\
-</g>',
-  pfthd: '<g id="pfthd">\n\
-	<text x="-3">\ue263</text>\n\
-	<circle r="4" class="stroke"/>\n\
 </g>',
   pmsig: '<path id="pmsig" class="stroke" stroke-width="0.8"\n\
 	d="m0 -7a5 5 0 0 1 0 -10a5 5 0 0 1 0 10"/>',
@@ -156,7 +159,6 @@ var glyphs = {
 	-2.1 5 -5.4 6.8 -7.6 6"/>',
   emb: '<path id="emb" class="stroke" stroke-width="1.2" stroke-linecap="round"\n\
 	d="m-2.5 -3h5"/>',
-  brth: '<text id="brth" y="-6" style="font:bold italic 30px serif">,</text>',
   roll: '<path id="roll" class="fill" d="m-6 0\n\
 	c0.4 -7.3 11.3 -7.3 11.7 0\n\
 	-1.3 -6 -10.4 -6 -11.7 0"/>',
@@ -175,10 +177,12 @@ var glyphs = {
 	d="m0 0v12"/>',
   sphr: '<path id="sphr" class="stroke" stroke-width="1.2"\n\
 	d="m0 0v6"/>',
-  sfz: '<text id="sfz" x="-5" y="-7" style="font:italic 14px serif">\n\
+  sfz: '<text id="sfz" x="-5" y="-7" \
+style="font-family:serif; font-style:italic; font-size:14px">\n\
 	s<tspan font-size="16" font-weight="bold">f</tspan>z</text>',
   trl: '<text id="trl" x="-2" y="-4"\n\
-	style="font:bold italic 16px serif">tr</text>',
+	style="font-family:serif; font-weight:bold; \
+font-style:italic; font-size:16px">tr</text>',
   opend: '<circle id="opend" class="stroke"\n\
 	cx="0" cy="-3" r="2.5"/>',
   snap: '<path id="snap" class="stroke" d="m-3 -6\n\
@@ -200,20 +204,7 @@ var glyphs = {
 		-2 -2.5 -2 2.5 -2 -2.5 -2 2.5"/>\n\
 	<path class="stroke" d="m3.5 0l5 -7"/>\n\
 </g>',
-  oct: '<text id="oct" style="font:12px serif">8</text>',
-//  pltr: '<pattern id="pltr" width="6" height="10" y="5"\n\
-//	patternUnits="userSpaceOnUse" viewBox="0 -5 6 5">\n\
-//	<path fill="currentColor" stroke="none"\n\
-//		d="m0 -.4c2 -1.5 3.4 -1.9 3.9 .4\n\
-//		0.2 .8 .7 .7 2.1 -.4\n\
-//		v0.8c-2 1.5 -3.4 1.9 -3.9 -.4\n\
-//		-.2 -.8 -.7 -.7 -2.1 .4z"/>\n\
-//</pattern>',
-  clearbg: '<filter id="clearbg">\n\
-	<feComposite in="SourceGraphic" result="comp"/>\n\
-	<feFlood flood-color="white" result="flood"/>\n\
-	<feMerge><feMergeNode in="flood"/><feMergeNode in="comp"/></feMerge>\n\
-</filter>'
+  oct: '<text id="oct" style="font-family:serif; font-size:12px">8</text>'
 }
 
 // mark a glyph as used and add it in <defs>
@@ -246,16 +237,13 @@ function defs_add(text) {
 	var	i, j, gl, tag, is,
 		ie = 0
 
+	// remove XML comments
+	text = text.replace(/<!--.*?-->/g, '')
+
 	while (1) {
 		is = text.indexOf('<', ie);
 		if (is < 0)
 			break
-		if (text.slice(is, is + 4) == "<!--") {
-			ie = text.indexOf('-->', is + 4)
-			if (ie < 0)
-				break
-			continue
-		}
 		i = text.indexOf('id="', is)
 		if (i < 0)
 			break
@@ -279,7 +267,10 @@ function defs_add(text) {
 				break
 			ie += 3 + tag.length
 		}
-		glyphs[gl] = text.slice(is, ie)
+		if (text.substr(is, 7) == '<filter')
+			fulldefs += '\n' + text.slice(is, ie)
+		else
+			glyphs[gl] = text.slice(is, ie)
 	}
 }
 
@@ -477,10 +468,7 @@ function g_close() {
 }
 
 // external SVG string
-function out_svg(str) {
-	output.push(str)
-}
-Abc.prototype.out_svg = out_svg
+Abc.prototype.out_svg = function(str) { output.push(str) }
 
 // exported functions for the annotation
 function sx(x) {
@@ -498,8 +486,24 @@ function sy(y) {
 		return (posy - y) / stv_g.scale	// voice scale
 	return stv_g.dy - y			// staff scale
 }
-Abc.prototype.sy = sy
-
+Abc.prototype.sy = sy;
+Abc.prototype.sh = function(h) {
+	if (stv_g.st < 0)
+		return h / stv_g.scale
+	return h
+}
+// for absolute X,Y coordinates
+Abc.prototype.ax = function(x) { return x + posx }
+Abc.prototype.ay = function(y) {
+	if (stv_g.st < 0)
+		return posy - y
+	return posy + (stv_g.dy - y) * stv_g.scale - stv_g.dy
+}
+Abc.prototype.ah = function(h) {
+	if (stv_g.st < 0)
+		return h
+	return h * stv_g.scale
+}
 // output scaled (x + <sep> + y)
 function out_sxsy(x, sep, y) {
 	x = sx(x);
@@ -521,8 +525,13 @@ function xygl(x, y, gl) {
 //		return
 	var 	tgl = tgls[gl]
 	if (tgl && !glyphs[gl]) {
-		out_XYAB('<text x="X" y="Y">A</text>\n',
-			x + tgl.x * stv_g.scale, y + tgl.y, tgl.c)
+		x += tgl.x * stv_g.scale;
+		y += tgl.y
+		if (tgl.sc)
+			out_XYAB('<text transform="translate(X,Y) scale(F)">B</text>\n',
+				x, y, tgl.sc, tgl.c);
+		else
+			out_XYAB('<text x="X" y="Y">A</text>\n', x, y, tgl.c)
 		return
 	}
 	if (!glyphs[gl]) {
@@ -554,29 +563,21 @@ function out_bar(x, y, h, dotted) {
 		'"/>\n')
 }
 // tuplet value - the staves are not defined
-function out_bnum(x, y, str,
-		  erase) {	// erase under the value
-	if (erase) {
-		def_use('clearbg');
-		erase = ' filter="url(#clearbg)"'
-	} else {
-		erase = ''
-	}
-	out_XYAB('<text style="font:italic 12px serif"\n\
-	x="X" y="Y" text-anchor="middle"B>A</text>\n',
-		x, y, str.toString(), erase)
+function out_bnum(x, y, str) {
+	out_XYAB('<text style="font-family:serif; font-style:italic; font-size:12px"\n\
+	x="X" y="Y" text-anchor="middle">A</text>\n',
+		x, y, str.toString())
 }
 // staff system brace
 function out_brace(x, y, h) {
-	def_use("brace");
 //fixme: '-6' depends on the scale
 	x += posx - 6;
 	y = posy - y;
 	h /= 24;
-	output.push('<use transform="translate(' +
+	output.push('<text transform="translate(' +
 				x.toFixed(2) + ',' + y.toFixed(2) +
 			') scale(2.5,' + h.toFixed(2) +
-			')" xlink:href="#brace"/>\n')
+			')">' + tgls.brace.c + '</text>\n')
 }
 
 // staff system bracket
@@ -601,9 +602,9 @@ function out_hyph(x, y, w) {
 		n = 0;
 	x += (w - d * n - 5) / 2;
 	out_XYAB('<path class="stroke" stroke-width="1.2"\n\
-	stroke-dasharray="5,F"\n\
-	d="mX YhG"/>\n',
-		x, y + 3,		// set the line a bit upper
+	stroke-dasharray="5,A"\n\
+	d="mX YhB"/>\n',
+		x, y + 6,		// set the line a bit upper
 		Math.round((d - 5) / stv_g.scale), d * n + 5)
 }
 // stem [and flags]
@@ -741,10 +742,34 @@ function out_tubr(x, y, dx, dy, up) {
 		'l' + dx.toFixed(2) + ' ' + (-dy).toFixed(2) +
 		'v' + (-h).toFixed(2) + '"/>\n')
 }
+// tuplet bracket with number - the staves are not defined
+function out_tubrn(x, y, dx, dy, up, str) {
+    var	sw = str.length * 10,
+	h = up ? -3 : 3;
+
+	dx /= stv_g.scale;
+	out_XYAB('<text style="font-family:serif; font-style:italic; font-size:12px"\n\
+	x="X" y="Y" text-anchor="middle">A</text>\n',
+		x + dx / 2, y + dy / 2, str);
+
+	if (!up)
+		y += 6;
+	output.push('<path class="stroke" d="m');
+	out_sxsy(x, ' ', y);
+	output.push('v' + h.toFixed(2) +
+		'm' + dx.toFixed(2) + ' ' + (-dy).toFixed(2) +
+		'v' + (-h).toFixed(2) + '"/>\n')
+	output.push('<path class="stroke" stroke-dasharray="' +
+		((dx - sw) / 2).toFixed(2) + ' ' + sw.toFixed(2) +
+		'" d="m');
+	out_sxsy(x, ' ', y - h);
+	output.push('l' + dx.toFixed(2) + ' ' + (-dy).toFixed(2) + '"/>\n')
+
+}
 // underscore line
 function out_wln(x, y, w) {
 	out_XYAB('<path class="stroke" stroke-width="0.8" d="mX YhF"/>\n',
-		x, y, w)
+		x, y + 3, w)
 }
 
 // decorations with string
@@ -752,29 +777,29 @@ var deco_str_style = {
 crdc:	{
 		dx: 0,
 		dy: 5,
-		style: 'font:italic 14px serif'
+		style: 'font-family:serif; font-style:italic; font-size:14px'
 	},
 dacs:	{
 		dx: 0,
 		dy: 3,
-		style: 'font:16px serif',
+		style: 'font-family:serif; font-size:16px',
 		anchor: ' text-anchor="middle"'
 	},
 fng:	{
 		dx: 0,
 		dy: 1,
-		style: 'font:8px Bookman',
+		style: 'font-family:Bookman; font-size:8px',
 		anchor: ' text-anchor="middle"'
 	},
 pf:	{
 		dx: 0,
 		dy: 5,
-		style: 'font:bold italic 16px serif'
+		style: 'font-family:serif; font-weight:bold; font-style:italic; font-size:16px'
 	},
 '@':	{
 		dx: 0,
 		dy: 5,
-		style: 'font:12px sans-serif'
+		style: 'font-family:sans-serif; font-size:12px'
 	}
 }
 
@@ -839,7 +864,8 @@ function out_ltr(x, y, val) {
 }
 function out_8va(x, y, val, defl) {
 	if (!defl.nost) {
-		out_XYAB('<text x="X" y="Y" style="font:italic bold 12px serif">8\
+		out_XYAB('<text x="X" y="Y" \
+style="font-family:serif; font-weight:bold; font-style:italic; font-size:12px">8\
 <tspan dy="-4" style="font-size:10px">va</tspan></text>\n',
 			x - 8, y);
 		x += 12;
@@ -855,7 +881,8 @@ function out_8va(x, y, val, defl) {
 }
 function out_8vb(x, y, val, defl) {
 	if (!defl.nost) {
-		out_XYAB('<text x="X" y="Y" style="font:italic bold 12px serif">8\
+		out_XYAB('<text x="X" y="Y" \
+style="font-family:serif; font-weight:bold; font-style:italic; font-size:12px">8\
 <tspan dy="-4" style="font-size:10px">vb</tspan></text>\n',
 			x - 8, y);
 		x += 4;
@@ -871,7 +898,8 @@ function out_8vb(x, y, val, defl) {
 }
 function out_15ma(x, y, val, defl) {
 	if (!defl.nost) {
-		out_XYAB('<text x="X" y="Y" style="font:italic bold 12px serif">15\
+		out_XYAB('<text x="X" y="Y" \
+style="font-family:serif; font-weight:bold; font-style:italic; font-size:12px">15\
 <tspan dy="-4" style="font-size:10px">ma</tspan></text>\n',
 			x - 10, y);
 		x += 20;
@@ -887,7 +915,8 @@ function out_15ma(x, y, val, defl) {
 }
 function out_15mb(x, y, val, defl) {
 	if (!defl.nost) {
-		out_XYAB('<text x="X" y="Y" style="font:italic bold 12px serif">15\
+		out_XYAB('<text x="X" y="Y" \
+style="font-family:serif; font-weight:bold; font-style:italic; font-size:12px">15\
 <tspan dy="-4" style="font-size:10px">mb</tspan></text>\n',
 			x - 10, y);
 		x += 7;
@@ -976,50 +1005,63 @@ function vskip(h) {
 
 // create the SVG image of the block
 function svg_flush() {
-	var head
-
 	if (multicol || output.length == 0 || !user.img_out || posy == 0)
 		return
+
+    var	head = '<svg xmlns="http://www.w3.org/2000/svg" version="1.1"\n\
+	xmlns:xlink="http://www.w3.org/1999/xlink"\n\
+	color="black" class="music" stroke-width=".7"',
+	g = ''
+
+	if (cfmt.bgcolor)
+		head += ' style="background-color: ' + cfmt.bgcolor + '"';
+
 	posy *= cfmt.scale
 
 	if (user.imagesize) {
-		head = '<svg xmlns="http://www.w3.org/2000/svg" version="1.1"\n\
-	xmlns:xlink="http://www.w3.org/1999/xlink"\n\
-	color="black"\n' +
+		head += '\n' +
 			user.imagesize +
 			' viewBox="0 0 ' + img.width.toFixed(0) + ' ' +
 			 posy.toFixed(0) + '">\n'
 	} else {
-		head = '<svg xmlns="http://www.w3.org/2000/svg" version="1.1"\n\
-	xmlns:xlink="http://www.w3.org/1999/xlink"\n\
-	color="black"\n\
-	width="' + img.width.toFixed(0) +
+		head += '\n\twidth="' + img.width.toFixed(0) +
 			'px" height="' + posy.toFixed(0) + 'px">\n'
 	}
 
 	if (style || font_style || musicfont) {
-		head += '<style type="text/css">' + style + font_style + '\n'
-		if (musicfont)
-			head += '@font-face {\n\
+		head += '<style type="text/css">' + style + font_style
+		if (musicfont) {
+			if (musicfont.indexOf('(') > 0) {
+				head += '\n\
+.music {font-family: music; font-size: 24px; fill: currentColor}\n\
+@font-face {\n\
   font-family: "music";\n\
-  src: ' + musicfont + '}\n';
-		head += '</style>\n'
+  src: ' + musicfont + '}';
+			} else {
+				head += '\n\
+.music {font-family: '+ musicfont +'; font-size: 24px; fill: currentColor}'
+			}
+		}
+		head += '\n</style>\n'
 	}
+	defs += fulldefs
 	if (defs)
 		head += '<defs>' + defs + '\n</defs>\n'
-	if (cfmt.bgcolor)
-		head += '<rect width="100%" height="100%" fill="' +
-				cfmt.bgcolor + '"/>\n'
-	if (cfmt.scale == 1)
-		head += '<g class="music" stroke-width=".7">\n'
-	else
-		head += '<g class="music" stroke-width=".7" transform="scale(' +
-				cfmt.scale.toFixed(2) + ')">\n';
+
+	// if %%pagescale != 1, do a global scale
+	// (with a container: transform scale in <svg> does not work
+	//	the same in all browsers)
+	// the class is used to know that the container is global
+	if (cfmt.scale != 1) {
+		head += '<g class="g" transform="scale(' +
+			cfmt.scale.toFixed(2) + ')">\n';
+		g = '</g>\n'
+	}
 
 	if (psvg)			// if PostScript support
 		psvg.ps_flush(true);	// + setg(0)
 
-	user.img_out(head + output.join('') + "</g>\n</svg>");
+	user.img_out(head + output.join('') + g + "</svg>");
 	output = []
 
 	font_style = ''
@@ -1029,15 +1071,17 @@ function svg_flush() {
 	} else {
 		musicfont = '';
 		style = '';
-		defs = ''
+		fulldefs = ''
 	}
+	defs = '';
 	posy = 0
 }
 
 // output a part of a block of images
 function blk_out() {
-	if (multicol || !output || !user.img_out)
+	if (multicol || !user.img_out)
 		return
+	blk_flush()
 	if (user.page_format && !block.started) {
 		block.started = true
 		if (block.newpage) {
@@ -1047,12 +1091,12 @@ function blk_out() {
 			user.img_out('<div class="nobrk">')
 		}
 	}
-	svg_flush()
 }
 Abc.prototype.blk_out = blk_out
 
 // output the end of a block (or tune)
 function blk_flush() {
+	svg_flush()
 	if (block.started) {
 		block.started = false;
 		user.img_out('</div>')

@@ -50,6 +50,8 @@ user.textrans = {
 	"Bad %%staffscale value": "Valeur incorrecte dans %%staffscale",
 	"Bad char '$1' in M:": "Mauvais caractère '$1' dans M:",
 	"Bad character '$1'": "Mauvais caractère '$1'",
+	"Bad controller number in %%MIDI": "Mauvais numéro de controleur dans %%MIDI",
+	"Bad controller value in %%MIDI": "Mauvaise valeur de controle dans %%MIDI",
 	"Bad duration '$1' in M:": "Durée '$1' incorrecte dans M:",
 	"Bad integer value": "Mauvaise valeur entière",
 	"Bad instr= value": "Mauvaise valeur de instr=",
@@ -79,7 +81,7 @@ user.textrans = {
 	"Decoration ignored": "Décoration ignorée",
 	"Empty line in tune header - ignored":
 				"Ligne vide dans en-tête de morceau - ignorée",
-	"Erroneous end of voice overlap": "Fin de superposition de voix erronée",
+	"Erroneous end of voice overlay": "Fin de superposition de voix erronée",
 	"Incorrect 1st value in %%repeat": "Première valeur incorrecte dans %%repeat",
 	"Incorrect 2nd value in %%repeat": "Deuxième valeur incorrecte dans %%repeat",
 	"Invalid 'r' in tuplet": "'r' invalide dans des tuplets",
@@ -110,6 +112,7 @@ user.textrans = {
 	"No end of tuplet": "Pas de fin de tuplet",
 	"No end of tuplet in this music line":
 				"Pas de fin de tuplet dans cette ligne de musique",
+	"No end of voice overlay": "Pas de fin de superposition de voix",
 	"No function for decoration '$1'": "Pas de fonction pour décoration '$1'",
 	"No note before '-'": "Pas de note devant '-'",
 	"No note before '<'": "Pas de note devant '<'",
@@ -142,6 +145,7 @@ user.textrans = {
 	"Unknown font $1": "Police $1 inconnue",
 	"Unknown glyph: '$1'": "Glyph '$1' inconnu",
 	"Unknown keyword '$1' in %%multicol": "Mot clé '$1' inconnu dans %%multicol",
+	"Unsecure code": "Code dangereux",
 	"Unterminated string": "Chaine de caractères non terminée",
 	"Unterminated string in Q:": "Chaine de caractères non terminée dans Q:",
 	"Voice overlay already started": "Superposition de voix déjà démarrée",

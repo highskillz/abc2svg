@@ -58,7 +58,7 @@ the following bookmarklet and render the music
 into the address/location box).
 
 ```
-javascript:(function(){d=document;b=d.body;b.innerHTML="\n%25abc2.2\n%25<!--[CDATA[\n"+b.textContent+"%25]]-->\n";function%20f(u){s=d.createElement('script');s.setAttribute('src',u);b.appendChild(s);};f('http://moinejf.free.fr/js/abc2svg-1.js');f('http://moinejf.free.fr/js/abcemb-1.js');f('http://moinejf.free.fr/js/play-1.js');function%20t(){if(typeof%20dom_loaded=="function"){dom_loaded()}else{setTimeout(t,200)}};setTimeout(t,200)})();void(0)
+javascript:(function(){d=document;b=d.body;b.innerHTML="\n%25abc-2.2\n%25<!--\n"+b.textContent+"%25-->\n";function%20f(u){s=d.createElement('script');s.setAttribute('src',u);b.appendChild(s);};f('http://moinejf.free.fr/js/abc2svg-1.js');f('http://moinejf.free.fr/js/abcemb-1.js');f('http://moinejf.free.fr/js/play-1.js');function%20t(){if(typeof%20dom_loaded=="function"){dom_loaded()}else{setTimeout(t,200)}};setTimeout(t,200)})();void(0)
 ```
 
 ##### Notes:
@@ -101,12 +101,20 @@ javascript:(function(){if(typeof%20loadjs=='function'){loadjs('abckbd2-1.js')}el
 ### nodeJS usage
 
 Installed via **npm**, the **abc2svg** package comes with the
-command line program `abc2svg`.
+command line (batch) programs `abc2svg` and `abc2odt`.
 
-This one may be used as **abcm2ps** to generate XHTML files,
-but it writes to standard output:
+These ones may be used as **abcm2ps** to generate XHTML or ODT files.   
 
+`abc2svg` writes to standard output:
+```
     abc2svg mytunes.abc > Out.xhtml
+```
+
+`abc2odt` output is `abc.odt` or the file specified
+by the command line argument `-o`:
+```
+	abc2odt my_file.abc -o my_file.odt
+```
 
 ### Build
 
@@ -114,26 +122,27 @@ If you want to build the **abc2svg** scripts in your machine,
 you must first get the files
 from [github](https://github.com/moinejf/abc2svg),
 either as a `tar.gz` or `.zip` file, or by cloning the repository:
-
+```
     git clone http://github.com/moinejf/abc2svg
-
+```
 (you may use `--depth=1` if you don't want the full `git` history)
 
-Then, building is done using the tool [ninja](https://ninja-build.org/).  
+Then, building is done using the tool [ninja](https://ninja-build.org/)
+or [samurai](https://github.com/michaelforney/samurai).  
 You may do it:
 
 - without minification  
   This is interesting for debug purpose, the scripts being more human friendly.
 
 ```
-    NOMIN=1 ninja -v
+    NOMIN=1 samu -v
 ```
 
 - in a standard way with minification  
   In this case, you need the tool `uglifyjs` which comes with nodeJS.
 
 ```
-    ninja -v
+    samu -v
 ```
 
 If you also want to change or add music glyphs, you may edit the source
@@ -141,7 +150,7 @@ file `font/abc2svg.sfd`. In this case, you will need both `base64` and `fontforg
 and run
 
 ```
-    ninja -v font.js
+    samu -v font.js
 ```
 
 ### Batch
@@ -154,3 +163,45 @@ following shell scripts (the result goes to stdout):
 - `abcjsc` with `jsc-1` (webkitgtk2)
 - `abcnode` with `node` (nodeJS)
 - `abcv8` with `d8` (Google libv8)
+
+#### backend scripts
+
+By default, the batch scripts generate (XHTML+SVG) files.   
+This output may be modified by backend scripts. These ones must appear
+just after the command.   
+There are:
+
+- `toabc.js`
+  This script outputs back the (selected) ABC tunes of the ABC source file.   
+  Transposition is applied.   
+  The resulting file does not contain the formatting parameters.
+  Example:
+
+```
+	abcjs24 toabc.js my_file.abc --select X:2 > tune_2.abc
+```
+
+- `toabw.js`
+  This script outputs a Abiword file (ABW+SVG) which may be read by some
+  word processors (abiword, libreoffice...) and converted to many other
+  formats by the batch function of abiword.   
+  The abc2svg music font (`abc2svf.woff` or `abc2svg.ttf`) must be installed
+  in the local system for displaying and/or converting the .abw file.   
+  Example:
+
+```
+	abcv8 toabw.js my_file.abc > my_file.abw
+```
+
+- `toodt.js`
+  This script creates an Open Document (ODT+SVG) which may be read by most
+  word processors (abiword, libreoffice...).   
+  It runs only with the npm script `abc2svg` and asks for the npm module
+  `jszip` to be installed.   
+  The output ODT document may be specified by the command line argument `-o`
+  (default `abc.odt`).   
+  Example:
+
+```
+	abc2svg toodt.js my_file.abc -o my_file.odt
+```

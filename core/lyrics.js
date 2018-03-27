@@ -1,6 +1,6 @@
 // abc2svg - lyrics.js - lyrics
 //
-// Copyright (C) 2014-2017 Jean-Francois Moine
+// Copyright (C) 2014-2018 Jean-Francois Moine
 //
 // This file is part of abc2svg-core.
 //
@@ -241,7 +241,7 @@ function get_lyrics(text, cont) {
 			ly = {
 				t: word,
 				font: gene.curfont,
-				w: strw(word),
+				w: strwh(word)[0],
 				istart: j,
 				iend: j + word.length
 			}
@@ -267,6 +267,10 @@ function ly_width(s, wlw) {
 		if (!ly)
 			continue
 		p = ly.t;
+		if (p == "-\n" || p == "_\n") {
+			ly.shift = 0
+			continue
+		}
 		w = ly.w;
 		swfac = ly.font.swfac;
 		xx = w + 2 * cwid(' ') * swfac
@@ -281,7 +285,7 @@ function ly_width(s, wlw) {
 				j = p.indexOf(' ');
 				gene.curfont = gene.deffont = ly.font
 				if (j > 0)
-					sz = strw(p.slice(0, j))
+					sz = strwh(p.slice(0, j))[0]
 				else
 					sz = w
 			}
@@ -293,8 +297,6 @@ function ly_width(s, wlw) {
 				if (shift > align)
 					align = shift
 			}
-		} else if (p == "-\n" || p == "_\n") {
-			shift = 0
 		} else {
 			shift = xx * .4
 			if (shift > 20)
@@ -350,8 +352,8 @@ function ly_width(s, wlw) {
 /* (the staves are not yet defined) */
 /* !! this routine is tied to ly_width() !! */
 function draw_lyric_line(p_voice, j, y) {
-	var	l, p, lastx, w, s, s2, f, ly, lyl,
-		hyflag, lflag, x0, font, shift, desc
+	var	p, lastx, w, s, s2, ly, lyl,
+		hyflag, lflag, x0, font, shift
 
 	if (p_voice.hy_st & (1 << j)) {
 		hyflag = true;
@@ -474,7 +476,6 @@ function draw_lyrics(p_voice, nly, a_h, y,
 	if (incr > 0) {				/* under the staff */
 		if (y > -cfmt.vocalspace)
 			y = -cfmt.vocalspace;
-		y += a_h[0] / 6;		// descent
 		y *= sc
 		for (j = 0; j < nly; j++) {
 			y -= a_h[j] * 1.1;
@@ -487,7 +488,6 @@ function draw_lyrics(p_voice, nly, a_h, y,
 	top = staff_tb[p_voice.st].topbar + cfmt.vocalspace
 	if (y < top)
 		y = top;
-	y += a_h[nly - 1] / 6;			// descent
 	y *= sc
 	for (j = nly; --j >= 0;) {
 		draw_lyric_line(p_voice, j, y);

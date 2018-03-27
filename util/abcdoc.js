@@ -1,7 +1,7 @@
 //#javascript
 // abcdoc-1.js file to include in html pages with abc2svg-1.js
 //
-// Copyright (C) 2014-2017 Jean-Francois Moine
+// Copyright (C) 2014-2018 Jean-Francois Moine
 //
 // This file is part of abc2svg.
 //
@@ -18,8 +18,15 @@
 // You should have received a copy of the GNU General Public License
 // along with abc2svg.  If not, see <http://www.gnu.org/licenses/>.
 
-window.onerror = function(msg) {
-	alert("window error: " + msg)
+window.onerror = function(msg, url, line) {
+	if (typeof msg == 'string')
+		alert("window error: " + msg +
+			"\nURL: " + url +
+			"\nLine: " + line)
+	else if (typeof msg == 'object')
+		alert("window error: " + msg.type + ' ' + msg.target.src)
+	else
+		alert("window error: " + msg)
 	return false
 }
 
@@ -44,27 +51,34 @@ function clean_txt(txt) {
 		switch (c) {
 		case '<': return "&lt;"
 		case '>': return "&gt;"
+		case '&': return "&amp;"
 		}
-		if (c == '&')
-			return "&amp;"
 		return c
 	})
 }
 
+// load a javascript file (needed for modules)
+var jsdir = (function() {
+    var scrs = document.getElementsByTagName('script');
+	return scrs[scrs.length - 1].src.match(/.*\//) || ''
+})()
+
+function loadjs(fn, relay) {
+	var s = document.createElement('script');
+	s.src = jsdir + fn;
+	s.type = 'text/javascript'
+	if (relay)
+		s.onload = relay;
+	document.head.appendChild(s)
+}
+
 // function called when the page is loaded
-var jsdir = document.currentScript.src.match(/.*\//) || ['']
 function dom_loaded() {
 	var page = document.body.innerHTML
 
-	// if some Postscript definition, load the interpreter
-	if (typeof Psvg != "function"
-	 && page.indexOf("\n%%beginps") > 0) {
-		var scr = document.createElement('script');
-		scr.src = jsdir[0] + "psvg-1.js";
-		scr.onload = dom_loaded;
-		document.head.appendChild(scr)
+	// load the required modules
+	if (!modules.load(page, null, dom_loaded))
 		return
-	}
 
 	// search the ABC tunes and add their rendering as SVG images
 	var	i = 0, j, k, res,
@@ -72,8 +86,7 @@ function dom_loaded() {
 		re_stop = /\n<|\n%.begin/g;	// stop on "<" and skip "%%begin"
 
 	abc = new Abc(user);
-	abc.tosvg('abcexample', '%abc2.2\n\
-%%bgcolor white\n\
+	abc.tosvg('abcexample', '%%bgcolor white\n\
 %%rightmargin 0.8cm\n\
 %%leftmargin 0.8cm\n\
 %%topspace 0')

@@ -1,6 +1,6 @@
 // psvg.js - small PS to SVG convertor for abc2svg
 
-// Copyright (C) 2014-2017 Jean-Francois Moine
+// Copyright (C) 2014-2018 Jean-Francois Moine
 //
 // This file is part of abc2svg-core.
 //
@@ -160,7 +160,7 @@ function Psvg(abcobj_r) {
     function path_end() {
 	svgbuf += path;
 	path = ''
-}
+    }
 
     function setg(newg) {
 	if (g == 2) {
@@ -181,7 +181,7 @@ function Psvg(abcobj_r) {
 	} else if (gchg) {
 		defg1()
 	}
-}
+    }
 
     function strw(s) {
 	return s.length * gcur.font_s * 0.5	// fixme: approximate value
@@ -471,7 +471,14 @@ function Psvg(abcobj_r) {
 				(gcur.yoffs - y).toFixed(2) + '">';
 		g = 2
 	}
-	svgbuf += s
+	svgbuf += s.replace(/<|>|&|  /g, function(c){
+			switch (c) {
+			case '<': return "&lt;"
+			case '>': return "&gt;"
+			case '&': return "&amp;"
+			case '  ': return '  '		// space + nbspace
+			}
+		})
 	if (span)
 		svgbuf += "</tspan>";
 	gcur.cx = x + strw(s)
@@ -502,10 +509,10 @@ function Psvg(abcobj_r) {
 
 // flush the PS buffer
 function ps_flush(g0) {
-	if (!svgbuf)
-		return
 	if (g0)
 		setg(0);
+	if (!svgbuf)
+		return
 	abcobj.out_svg(svgbuf);
 	svgbuf = ''
 }
@@ -531,7 +538,7 @@ function pscall(f, x, y, script) {
 }
 
 // try to generate a decoration by PS
-function psdeco(f, x, y, de) {
+Psvg.prototype.psdeco = function(f, x, y, de) {
 	var	dd, de2, script, defl,
 		Os = wps.parse('/' + f + ' where'),
 		A = Os.pop()
@@ -552,7 +559,7 @@ function psdeco(f, x, y, de) {
 		script += x.toFixed(2) + ' ' + y.toFixed(2) + ' ';
 		de2 = de.start;
 		x = de2.x;
-		y = de2.y + staff_tb[de2.st].y
+		y = abcobj.get_y(de2.st, de2.y)
 		if (x > de.x - 20)
 			x = de.x - 20
 	}
@@ -567,7 +574,7 @@ function psdeco(f, x, y, de) {
 }
 
 // try to generate a glyph by PS
-function psxygl(x, y, gl){
+Psvg.prototype.psxygl = function(x, y, gl){
 	var	Os = wps.parse('/' + gl + ' where'),
 		A = Os.pop()
 	if (!A)
@@ -575,8 +582,6 @@ function psxygl(x, y, gl){
 	Os.pop()
 	return pscall(gl, x, y, 'dlw ')
 }
-
-	abcobj.set_ps(psdeco, psxygl);		// set the pointers in the core
 
 //  initialize the PostScript functions
 	wps.parse("\
@@ -700,4 +705,44 @@ systemdict/def{currentdict 2 index 2 index put pop pop}put\n\
 /umrd{(umrd).svg(xygl)3 .call0}.bdef\n\
 /y0{.svg(y0)1 .call}.bdef\n\
 /y1{.svg(y1)1 .call}.bdef\n")
+
+} // Psvg()
+
+// function called on Abc creation or on module loaded
+function psvg_init(abc) {
+
+	//export some functions/variables
+	abc.tosvg('psvg', '\
+%%beginjs\n\
+function svgcall(f, x, y, v1, v2) {\n\
+    var	xy = psvg.getorig();\n\
+	psvg.ps_flush();\n\
+	f((x + xy[0]) * stv_g.scale, y - xy[1], v1, v2)\n\
+}\n\
+Abc.prototype.arpps = function(val, x, y) { svgcall(out_arp, x, y, val) }\n\
+Abc.prototype.ltrps = function(val, x, y) { svgcall(out_ltr, x, y, val) }\n\
+Abc.prototype.xyglsps = function (str, x, y, gl) {\n\
+	svgcall(out_deco_str, x, y, gl, str)\n\
+}\n\
+Abc.prototype.xyglvps = function(val, x, y, gl) {\n\
+	svgcall(out_deco_val, x, y, gl, val)\n\
+}\n\
+Abc.prototype.xyglps = function(x, y, gl) { svgcall(xygl, x, y, gl) }\n\
+Abc.prototype.get_y = function(st, y) { return y + staff_tb[st].y }\n\
+Abc.prototype.stv_g = stv_g\n\
+Abc.prototype.psget_x = function() {\n\
+	return posx / stv_g.scale\n\
+}\n\
+Abc.prototype.psget_y = function() {\n\
+	return stv_g.started ? stv_g.dy : posy\n\
+}\n\
+\
+Abc.prototype.psvg_create = function(abc) {\n\
+	psvg = new Psvg(abc);\n\
+	psdeco = psvg.psdeco;\n\
+	psxygl = psvg.psxygl\n\
+}\n\
+%%endjs\n\
+');
+	abc.psvg_create(abc)
 }

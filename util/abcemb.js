@@ -1,7 +1,7 @@
 //#javascript
 // abcemb-1.js file to include in html pages with abc2svg-1.js
 //
-// Copyright (C) 2014-2017 Jean-Francois Moine
+// Copyright (C) 2014-2018 Jean-Francois Moine
 //
 // This file is part of abc2svg.
 //
@@ -18,8 +18,15 @@
 // You should have received a copy of the GNU General Public License
 // along with abc2svg.  If not, see <http://www.gnu.org/licenses/>.
 
-window.onerror = function(msg) {
-	alert("window error: " + msg)
+window.onerror = function(msg, url, line) {
+	if (typeof msg == 'string')
+		alert("window error: " + msg +
+			"\nURL: " + url +
+			"\nLine: " + line)
+	else if (typeof msg == 'object')
+		alert("window error: " + msg.type + ' ' + msg.target.src)
+	else
+		alert("window error: " + msg)
 	return false
 }
 
@@ -30,8 +37,17 @@ var	errtxt = '',
 					// 1: play possible,
 					// 2: playing
 	abcplay,
-	a_src = [],			// index: #sequence, value: ABC source
-	a_pe = []			// index: #sequence, value: playing events
+	playconf = {
+		onend: endplay
+//uncomment for test
+//		,sfu: "./"
+	},
+	page,				// document source
+	a_src = [],			// index: #sequence,
+					//	value: [start_idx, end_idx]
+	a_pe = [],			// index: #sequence, value: playing events
+	glop,				// global sequence for play
+	old_gm
 
 // -- abc2svg init argument
 var user = {
@@ -50,9 +66,8 @@ function clean_txt(txt) {
 		switch (c) {
 		case '<': return "&lt;"
 		case '>': return "&gt;"
+		case '&': return "&amp;"
 		}
-		if (c == '&')
-			return "&amp;"
 		return c
 	})
 }
@@ -72,19 +87,16 @@ function playseq(seq) {
 	}
 	play = 2
 	if (!a_pe[seq]) {		// if no playing event
-		if (!abcplay) {
-			abcplay = new AbcPlay({
-					endplay: endplay
-//uncomment for test
-//					,sfu: "./"
-				})
-		}
+		if (!abcplay)
+			abcplay = AbcPlay(playconf)
 		var abc = new Abc(user);
 
 		abcplay.clear();
 		abc.tosvg("play", "%%play")
 		try {
-			abc.tosvg("abcemb" + seq, a_src[seq])
+			if (glop)
+				abc.tosvg("abcemb", page, glop[0], glop[1]);
+			abc.tosvg("abcemb" + seq, page, a_src[seq][0], a_src[seq][1])
 		} catch(e) {
 			alert(e.message + '\nabc2svg tosvg bug - stack:\n' + e.stack);
 			play = 1;
@@ -97,10 +109,14 @@ function playseq(seq) {
 }
 
 // load a javascript file
-var jsdir = document.currentScript.src.match(/.*\//) || ['']
+var jsdir = (function() {
+    var scrs = document.getElementsByTagName('script');
+	return scrs[scrs.length - 1].src.match(/.*\//) || ''
+})()
+
 function loadjs(fn, relay) {
 	var s = document.createElement('script');
-	s.src = jsdir[0] + fn;
+	s.src = jsdir + fn;
 	s.type = 'text/javascript'
 	if (relay)
 		s.onload = relay;
@@ -109,28 +125,22 @@ function loadjs(fn, relay) {
 
 // function called when the page is loaded
 function dom_loaded() {
-	var page = document.body.innerHTML;
-
-	// if some Postscript definition, load the interpreter
-	if (typeof Psvg != "function"
-	 && page.indexOf("\n%%beginps") > 0) {
-		loadjs("psvg-1.js", dom_loaded)
+	if (typeof Abc != "function") {		// wait for the abc2svg core
+		setTimeout(dom_loaded, 500)
 		return
 	}
+	page = document.body.innerHTML;
 
-	user.get_abcmodel =
-		function(tsfirst, voice_tb, music_types, info) {
-			if (play == 2)
-				abcplay.add(tsfirst, voice_tb)
-		}
+	// load the required modules
+	if (!modules.load(page, null, dom_loaded))
+		return
 
 	// search the ABC tunes,
-	// replace them by SVG images and
-	// generate the sounds
+	// replace them by SVG images with play on click
 	var	i = 0, j, k, res, src,
 		seq = 0,
 		re = /\n%abc|\nX:/g,
-		re_stop = /\n<|\n%.begin/g;
+		re_stop = /\nX:|\n<|\n%.begin/g;
 	abc = new Abc(user)
 	for (;;) {
 
@@ -146,7 +156,7 @@ function dom_loaded() {
 		re_stop.lastIndex = ++j
 		while (1) {
 			res = re_stop.exec(page)
-			if (!res || res[0] == "\n<")
+			if (!res || res[0][1] != "%")
 				break
 			k = page.indexOf(res[0].replace("begin", "end"),
 					re_stop.lastIndex)
@@ -158,15 +168,18 @@ function dom_loaded() {
 			k = page.length
 		else
 			k = re_stop.lastIndex - 2;
-		src = page.slice(j, k)
 		if (play) {
-			new_page += '<div onclick="playseq(' +
-					a_src.length +
-					')">\n';
-			a_src.push(src)
+			if (page[j] == 'X') {
+				new_page += '<div onclick="playseq(' +
+						a_src.length +
+						')">\n';
+				a_src.push([j, k])
+			} else if (!glop) {
+				glop = [j, k]
+			}
 		}
 		try {
-			abc.tosvg('abcemb', src)
+			abc.tosvg('abcemb', page, j, k)
 		} catch (e) {
 			alert("abc2svg javascript error: " + e.message +
 				"\nStack:\n" + e.stack)
@@ -179,21 +192,31 @@ function dom_loaded() {
 				"\n...\n\n" + errtxt);
 			errtxt = ""
 		}
-		if (play)
+		if (play && page[j] == 'X')
 			new_page += '</div>\n';
 		i = k
-		if (k >= page.length)
+		if (i >= page.length)
 			break
+		if (page[i] == 'X')
+			i--
 		re.lastIndex = i
 	}
-	user.img_out = null		// stop SVG generation
 	try {
 		document.body.innerHTML = new_page + page.slice(i)
 	} catch (e) {
 		alert("abc2svg bad generated SVG: " + e.message +
 			"\nStack:\n" + e.stack)
 	}
-}
+	if (play) {
+		delete user.img_out;		// stop SVG generation
+		old_gm = user.get_abcmodel;
+		user.get_abcmodel = function(tsfirst, voice_tb, music_types, info) {
+				if (old_gm)
+					old_gm(tsfirst, voice_tb, music_types, info);
+				abcplay.add(tsfirst, voice_tb)
+			}
+	}
+} // dom_loaded()
 
 // if playing is possible, load the playing scripts
 if (window.AudioContext || window.webkitAudioContext)

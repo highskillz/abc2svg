@@ -1,6 +1,6 @@
 // abc2svg - parse.js - ABC parse
 //
-// Copyright (C) 2014-2017 Jean-Francois Moine
+// Copyright (C) 2014-2018 Jean-Francois Moine
 //
 // This file is part of abc2svg-core.
 //
@@ -125,8 +125,6 @@ function new_clef(clef_def) {
 }
 
 // get a transposition value
-var pit_st = new Int8Array([0, 2, 4, 5, 7, 9, 11])
-
 function get_transp(param,
 			type) {		// undefined or "instr"
 	var	i, val, tmp, note,
@@ -157,7 +155,7 @@ function get_transp(param,
 	}
 
 	// by music interval
-	if (type == "instr") {	// convert instr= into score= or sound=
+	if (type == "instr") {	// convert instrument= into score= or sound=
 		tmp = param.indexOf('/')
 		if (!cfmt.sound) {
 			if (tmp < 0)
@@ -180,7 +178,7 @@ function get_transp(param,
 			return
 		}
 		note.pit += 124;	// 126 - 2 for value > 0 and 'C' % 7 == 0
-		val = ((note.pit / 7) | 0) * 12 + pit_st[note.pit % 7]
+		val = ((note.pit / 7) | 0) * 12 + note_pit[note.pit % 7]
 		if (note.acc && note.acc != 3)		// if not natural
 			val += note.acc;
 		pit[i] = val
@@ -213,10 +211,8 @@ function set_linebreak(param) {
 	var i, item
 
 	for (i = 0; i < 128; i++) {
-		if (char_tb[i] == "\n") {
+		if (char_tb[i] == "\n")
 			char_tb[i] = nil	// remove old definition
-			break
-		}
 	}
 	param = param.split(/\s+/)
 	for (i = 0; i < param.length; i++) {
@@ -231,7 +227,6 @@ function set_linebreak(param) {
 			break
 		case "<none>":
 			continue
-			break
 		case "<EOL>":
 			item = '\n'
 			break
@@ -246,17 +241,17 @@ function set_linebreak(param) {
 
 // set a new user character (U: or %%user)
 function set_user(parm) {
-	var	k,
-		a = parm.match(/(.*?)[= ]+(.*)/),
-		c = a[1],
-		v = a[2]
+    var	k, c, v,
+	a = parm.match(/(.*?)[= ]*([!"].*[!"])/)
 
-	if (!v || (v[0] != '!' && v[0] != '"')) {
+	if (!a) {
 		syntax(1, 'Lack of starting ! or " in U: / %%user')
 		return
 	}
+	c = a[1];
+	v = a[2]
 	if (v.slice(-1) != v[0]) {
-		syntax(1, "Lack of ending $1 in U:/%%user", c2)
+		syntax(1, "Lack of ending $1 in U:/%%user", v[0])
 		return
 	}
 	if (c[0] == '\\') {
@@ -337,38 +332,48 @@ function new_block(subtype) {
 		goto_tune()
 	var voice_s = curvoice;
 	curvoice = voice_tb[par_sy.top_voice]
-	if (curvoice.last_sym)
-		curvoice.last_sym.eoln = true;
 	sym_link(s);
 	curvoice = voice_s
 	return s
 }
 
-// set the K: / V: parameters
-function set_kv_parm(a) {	// array of items
-	var	s, item, pos, val
-
-	// add the global parameters if not done yet
-	if (!curvoice.init) {
-		curvoice.init = true
-
-		if (info.V) {
-			if (info.V['*'])
-				a = info.V['*'].concat(a)
-			if (info.V[curvoice.id])
-				a = info.V[curvoice.id].concat(a)
-		}
-	}
-	if (a.length == 0)
-		return 0
+// set the voice parameters
+function set_vp(a) {
+    var	s, item, pos, val, clefpit
 
 	while (1) {
 		item = a.shift()
 		if (!item)
 			break
+		if (item[item.length - 1] == '='
+		 && a.length == 0) {
+			syntax(1, err_bad_val_s, item)
+			break
+		}
 		switch (item) {
 		case "clef=":
 			s = a.shift()		// keep last clef
+			break
+		case "clefpitch=":
+			item = a.shift()		// (<note><octave>)
+			if (item) {
+				val = ntb.indexOf(item[0])
+				if (val >= 0) {
+					switch (item[1]) {
+					case "'":
+						val += 7
+						break
+					case ',':
+						val -= 7
+						if (item[2] == ',')
+							val -= 7
+						break
+					}
+					clefpit = 4 - val	// 4 = 'G'
+					break
+				}
+			}
+			syntax(1, err_bad_val_s, item)
 			break
 		case "combine=":		// %%voicecombine
 		case "octave=":
@@ -386,8 +391,8 @@ function set_kv_parm(a) {	// array of items
 			curvoice.transp = get_transp(a.shift(), 'instr')
 			break
 		case "map=":			// %%voicemap
-			item = item.slice(0, -1);
-			curvoice[item] = a.shift()
+			if (cfmt.sound != "play")
+				curvoice.map = a.shift()
 			break
 		case "name=":
 		case "nm=":
@@ -397,30 +402,27 @@ function set_kv_parm(a) {	// array of items
 			curvoice.new_name = true
 			break
 		case "stem=":
-			item = "stm="
-		case "dyn=":			// %%pos
-		case "gch=":
-		case "gst=":
-		case "orn=":
-		case "stm=":
-		case "voc=":
-		case "vol=":
-			val = posval[a.shift()]
+		case "pos=":
+			if (item == "pos=")
+				item = a.shift().split(' ')
+			else
+				item = ["stm", a.shift()];
+			val = posval[item[1]]
 			if (val == undefined) {
-				syntax(1, err_bad_val_s, item)
+				syntax(1, err_bad_val_s, item[0])
 				break
 			}
-			item = item.slice(0, -1)
 			if (!pos)
 				pos = {}
-			pos[item] = val
+			pos[item[0]] = val
 			break
 		case "scale=":			// %%voicescale
-			val = parseFloat(a.shift())
-			if (isNaN(val))
-				syntax(1, err_bad_val_s, item)
-			else
-				curvoice[item.slice(0, -1)] = val
+			val = a.shift()
+			if (isNaN(val) || val < .6 || val > 1.5) {
+				syntax(1, err_bad_val_s, "%%" + cmd)
+				break
+			}
+			curvoice.scale = val
 			break
 		case "score=":
 			if (cfmt.sound)
@@ -449,9 +451,16 @@ function set_kv_parm(a) {	// array of items
 		case "stafflines=":
 			val = get_st_lines(a.shift())
 			if (val == undefined)
-				syntax(1, err_bad_val_s, item)
+				syntax(1, "Bad %%stafflines value")
 			else
 				curvoice.stafflines = val
+			break
+		case "staffscale=":
+			val = parseFloat(a.shift())
+			if (isNaN(val) || val < .3 || val > 2)
+				syntax(1, "Bad %%staffscale value")
+			else
+				curvoice.staffscale = val
 			break
 		default:
 			switch (item.slice(0, 4)) {
@@ -481,10 +490,28 @@ function set_kv_parm(a) {	// array of items
 
 	if (s) {
 		s = new_clef(s)
-		if (s)
+		if (s) {
+			if (clefpit)
+				s.clefpit = clefpit
 			get_clef(s)
+		}
 	}
-}
+} // set_vp()
+
+// set the K: / V: parameters
+function set_kv_parm(a) {	// array of items
+	if (!curvoice.init) {	// add the global parameters if not done yet
+		curvoice.init = true
+		if (info.V) {
+			if (info.V['*'])
+				a = info.V['*'].concat(a)
+			if (info.V[curvoice.id])
+				a = info.V[curvoice.id].concat(a)
+		}
+	}
+	if (a.length != 0)
+		set_vp(a)
+} // set_kv_parm()
 
 // memorize the K:/V: parameters
 function memo_kv_parm(vid,	// voice ID (V:) / '*' (K:/V:*)
@@ -626,7 +653,7 @@ function new_key(param) {
 		}
 	}
 
-	s.k_delta = (cgd2cde[(s.k_sf + 7) % 7] + 14) % 7;
+	s.k_delta = cgd2cde[(s.k_sf + 7) % 7];
 	s.k_mode = mode
 
 	return [s, info_split(param, 0)]
@@ -750,12 +777,12 @@ function new_meter(text) {
 		}
 	}
 	if (p[i] == '=') {
-		val = p.substring(++i)
-		if (!val.match(/^(\d|\/)+$/)) {
-			syntax(1, "Bad duration '$1' in M:", val)
+		val = p.substring(++i).match(/^(\d+)\/(\d+)$/)
+		if (!val) {
+			syntax(1, "Bad duration '$1' in M:", p.substring(i))
 			return
 		}
-		wmeasure = BASE_LEN * eval(val)
+		wmeasure = BASE_LEN * val[1] / val[2]
 	}
 	s.wmeasure = wmeasure
 
@@ -899,19 +926,19 @@ function do_info(info_type, text) {
 //fixme: ??
 		if (parse.state == 2)
 			goto_tune();
-		a = text.match(/^(\d+)\/(\d+)(=(\d+)\/(\d+))?$/)
+		a = text.match(/^1\/(\d+)(=(\d+)\/(\d+))?$/)
 		if (a) {
-			d1 = Number(a[2])
+			d1 = Number(a[1])
 			if (!d1 || (d1 & (d1 - 1)) != 0)
 				break
-			d1 = Number(a[1]) / d1 * BASE_LEN
-			if (a[3]) {
-				d2 = Number(a[5])
+			d1 = BASE_LEN / d1
+			if (a[2]) {
+				d2 = Number(a[4])
 				if (!d2 || (d2 & (d2 - 1)) != 0) {
 					d2 = 0
 					break
 				}
-				d2 = Number(a[4]) / d2 * BASE_LEN
+				d2 = Number(a[3]) / d2 * BASE_LEN
 			} else {
 				d2 = d1
 			}
@@ -1133,6 +1160,8 @@ function new_bar() {
 			s.text = ''
 			break
 		}
+		if (c > '0' && c <= '9')	// ":|[2"
+			break
 		bar_type = bar_type.slice(0, -1);
 		line.index--;
 		c = '['
@@ -1198,11 +1227,13 @@ function new_bar() {
 	s2 = curvoice.last_sym
 	if (s2 && s2.type == SPACE) {
 		s2.time--		// keep the space at the right place
-	} else if (s2 && s2.type == BAR) {
+	} else if (s2 && s2.type == BAR
+		&& !s2.a_gch && !s2.a_dd
+		&& !s.a_gch && !s.a_dd) {
 
 		/* remove the invisible repeat bars when no shift is needed */
 		if (bar_type == "["
-		 && !s2.text && !s2.a_gch
+		 && !s2.text
 		 && (curvoice.st == 0
 		  || (par_sy.staves[curvoice.st - 1].flags & STOP_BAR)
 		  || s.norepbra)) {
@@ -1221,8 +1252,7 @@ function new_bar() {
 		}
 
 		/* merge back-to-back repeat bars */
-		if (bar_type == "|:"
-		 && !s.text) {
+		if (bar_type == "|:") {
 			if (s2.bar_type == ":|") {
 				s2.bar_type = "::";
 				s2.rbstop = 2
@@ -1439,7 +1469,6 @@ function parse_staves(p) {
 
 // split an info string
 function info_split(text) {
-//		    start) {		// handle 'key=' after 'start' items
 	var	a = [],
 		item = "",
 		i, j,
@@ -1900,7 +1929,8 @@ function new_note(grace, tp_fact) {
 		s.type = REST;
 		line.index++;
 		nd = parse_dur(line);
-		s.dur_orig = ((curvoice.ulen < 0) ? BASE_LEN / 4 :
+		s.dur_orig = ((curvoice.ulen < 0) ?
+					15120 :	// 2*2*2*2*3*3*3*5*7
 					curvoice.ulen) * nd[0] / nd[1];
 		s.dur = s.dur_orig * curvoice.dur_fact;
 		s.notes = [{
@@ -1963,8 +1993,10 @@ function new_note(grace, tp_fact) {
 				}
 			}
 			note = parse_basic_note(line,
-					(s.grace || curvoice.ulen < 0) ?
-						BASE_LEN / 4 : curvoice.ulen)
+					s.grace ? BASE_LEN / 4 :
+					curvoice.ulen < 0 ?
+						15120 :	// 2*2*2*2*3*3*3*5*7
+						curvoice.ulen)
 			if (!note)
 				return //null
 
@@ -2113,8 +2145,6 @@ function new_note(grace, tp_fact) {
 			s.head = res[0];
 			s.dots = res[1];
 			s.nflags = res[2]
-			if (s.xstem)
-				s.nflags = 0
 			if (s.nflags <= -2)
 				s.stemless = true
 		} else {					// rest
@@ -2178,15 +2208,15 @@ var char_tb = [
 	nil, nil, nil, nil,
 	nil, nil, nil, nil,
 	nil, nil, nil, nil,		/* .. - 1f */
-	" ", "!", '"', nil,		/* (sp) ! " # */
+	" ", "!", '"', "i",		/* (sp) ! " # */
 	"\n", nil, "&", nil,		/* $ % & ' */
-	"(", ")", nil, nil,		/* ( ) * + */
+	"(", ")", "i", nil,		/* ( ) * + */
 	nil, "-", "!dot!", nil,		/* , - . / */
 	nil, nil, nil, nil, 		/* 0 1 2 3 */
 	nil, nil, nil, nil, 		/* 4 5 6 7 */
-	nil, nil, "|", nil,		/* 8 9 : ; */
-	"<", "n", "<", nil,		/* < = > ? */
-	nil, "n", "n", "n",		/* @ A B C */
+	nil, nil, "|", "i",		/* 8 9 : ; */
+	"<", "n", "<", "i",		/* < = > ? */
+	"i", "n", "n", "n",		/* @ A B C */
 	"n", "n", "n", "n", 		/* D E F G */
 	"!fermata!", "d", "d", "d",	/* H I J K */
 	"!emphasis!", "!lowermordent!",
@@ -2204,11 +2234,11 @@ var char_tb = [
 	"d", "!upbow!",
 		"!downbow!", "d",	/* t u v w */
 	"n", "n", "n", "{",		/* x y z { */
-	"|", "}", "!roll!", nil,	/* | } ~ (del) */
+	"|", "}", "!gmark!", nil,	/* | } ~ (del) */
 ]
 
 function parse_music_line() {
-	var	grace, last_note_sav, a_dcn_sav, no_eol,
+	var	grace, last_note_sav, a_dcn_sav, no_eol, s,
 		tp_a = [], tp,
 		tpn = -1,
 		tp_fact = 1,

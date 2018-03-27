@@ -3,7 +3,7 @@
 // abc2svg with native nodeJS
 
 // define the system functions
-var	fs = require("fs");
+    var	sep = require('path').sep
 
 // interpreter specific functions
 function print(str) {
@@ -15,12 +15,14 @@ function printErr(str) {
 }
 
 function readFile(fname) {
+    var	fs = require("fs")
+
 	return fs.readFileSync(fname).toString()
 }
 
 function loadRelativeToScript(script) {
 	var geval = eval;
-	geval(readFile(__dirname + '/' + script))
+	geval(readFile(__dirname + sep + script))
 }
 
 function quit() {
@@ -50,11 +52,11 @@ Arguments:\n\
 var m = require("abc2svg/abc2svg-1");
 global.abc2svg = m.abc2svg;
 global.Abc = m.Abc;
+global.modules = m.modules;
 
 // load the command line
 m = require("abc2svg/cmdline");
 global.abc = m.abc;
-global.errtxt = m.errtxt;
 global.user = m.user;
 global.abc_cmd = m.abc_cmd
 
@@ -66,7 +68,7 @@ args.shift();
 args.shift()
 
 // if the first argument is a script, load it
-if (args[0] && args[0].match(/\.js$/)) {
+if (/\.js$/.test(args[0])) {
     var fn = args[0][0] == '/' ? args[0] : (__dirname + '/' + args[0]),
 	f = readFile(fn);
 	eval(f);

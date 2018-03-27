@@ -1,6 +1,6 @@
 // toaudio.js - audio generation
 //
-// Copyright (C) 2015-2017 Jean-Francois Moine
+// Copyright (C) 2015-2018 Jean-Francois Moine
 //
 // This file is part of abc2svg-core.
 //
@@ -21,7 +21,7 @@
 function ToAudio() {
 
 // constants from Abc
-var	BAR = 0,
+  var	BAR = 0,
 	CLEF = 1,
 	GRACE = 4,
 	KEY = 5,
@@ -39,65 +39,73 @@ var	BAR = 0,
 	abc_time,			// last ABC time
 	play_factor;			// play time factor
 
+// ToAudio
+  return {
 // clear the playing events and return the old ones
-    ToAudio.prototype.clear = function() {
+    clear: function() {
 	var a_pe = a_e;
 	a_e = null
 	return a_pe
-    } // clear()
+    }, // clear()
 
 // add playing events from the ABC model
-    ToAudio.prototype.add = function(start,		// starting symbol
-				 voice_tb) {		// voice table
-	var	bmap = new Float32Array(7), // measure base map
+    add: function(start,		// starting symbol
+		 voice_tb) {		// voice table
+	var	kmaps = [],		// accidentals per voice from key signature
+		cmaps = [],		// current accidental table
 		map,			// map of the current voice - 10 octaves
-		vmap = [],		// map of all voices
 		i, n, dt, d, v,
 		top_v,			// top voice
 		rep_st_s,		// start of sequence to be repeated
-		rep_en_s,		// end
+		rep_en_s,		// end ("|1")
 		rep_nx_s,		// restart at end of repeat
 		rep_st_transp,		// transposition at start of repeat sequence
 		rep_st_map,		// and map
 		rep_st_fac,		// and play factor
 		transp,			// clef transposition per voice
+		instr = [],		// instrument per voice
 		s = start
 
-	// set the transpositions
+	// set the accidentals, transpositions and instruments of the voices
 	function set_voices() {
-		var v, s
+	    var v, p_v, s, mi
 
 		transp = new Int8Array(voice_tb.length)
 		for (v = 0; v < voice_tb.length; v++) {
-			s = voice_tb[v].clef;
+			p_v = voice_tb[v];
+
+			mi = p_v.instr || 0
+			if (p_v.midictl) {
+				if (p_v.midictl[32])		// bank LSB
+					mi += p_v.midictl[32] * 128
+				if (p_v.midictl[0])		// bank MSB
+					mi += p_v.midictl[0] * 128 * 128
+			}
+			instr[v] = mi;			// MIDI instrument
+
+			s = p_v.clef;
 			transp[v] = (!s.clef_octave || s.clef_oct_transp) ?
 					0 : s.clef_octave
-			if (!vmap[v])
-				vmap[v] = new Float32Array(70);
-			map = vmap[v];
-			voice_tb[v].key.v = v;
-			key_map(voice_tb[v].key)
+
+			kmaps[v] = new Float32Array(70);
+			cmaps[v] = new Float32Array(70);
+			p_v.key.v = v;
+			key_map(p_v.key)
 		}
 	} // set_voices()
 
-	// re-initialize the map on bar
-	function bar_map(v) {
-		for (var j = 0; j < 10; j++)
-			for (var i = 0; i < 7; i++)
-				vmap[v][j * 7 + i] = bmap[i]
-	} // bar_map()
-
-	// define the note map
+	// define the accidentals of a voice
 	function key_map(s) {
+	    var i, bmap
+
 	    if (s.k_bagpipe) {
 		// detune for just intonation in A (C is C#, F is F# and G is Gnat)
-		bmap = [100-13.7, -2, 2, 100-15.6, -31.2, 0, 3.9]
-		for (var i = 0; i < 7; i++)
+		bmap = new Float32Array([100-13.7, -2, 2, 100-15.6, -31.2, 0, 3.9])
+		for (i = 0; i < 7; i++)
 			bmap[i] = (bmap[i] + 150.6) / 100 // 'A' bagpipe = 480Hz
 				// 150.6 = (Math.log2(480/440) - 1)*1200
 	    } else {
-		for (var i = 0; i < 7; i++)
-			bmap[i] = 0
+		bmap = new Float32Array(7)
 		switch (s.k_sf) {
 		case 7: bmap[6] = 1
 		case 6: bmap[2] = 1
@@ -115,14 +123,16 @@ var	BAR = 0,
 		case -1: bmap[6] = -1; break
 		}
 	    }
-		bar_map(s.v)
+	    for (i = 0; i < 10; i++)
+		kmaps[s.v].set(bmap, i * 7);
+	    cmaps[s.v].set(kmaps[s.v])
 	} // key_map()
 
 	// convert ABC pitch to MIDI index
 	function pit2mid(s, i) {
 		var	n, oct,
 			note = s.notes[i];
-			p = note.pit + 19, // pitch from C-1
+			p = note.apit + 19, // pitch from C-1
 			a = note.acc
 
 		if (transp[s.v])
@@ -142,7 +152,7 @@ var	BAR = 0,
 	function do_tie(s, note, d) {
 		var	n,
 			end_time = s.time + s.dur,
-			pit = note.pit,
+			pit = note.apit,
 			p = pit + 19,
 			a = note.acc
 
@@ -172,7 +182,7 @@ var	BAR = 0,
 		n = s.notes.length
 		for (i = 0; i < n; i++) {
 			note = s.notes[i]
-			if (note.pit == pit) {
+			if (note.apit == pit) {
 				d += s.dur / play_factor;
 				note.ti2 = true
 				return note.ti1 ? do_tie(s, note, d) : d
@@ -183,7 +193,7 @@ var	BAR = 0,
 
 	// generate the grace notes
 	function gen_grace(s) {
-		var	g, i, n, t, d,
+		var	g, i, n, t, d, s2,
 			next = s.next
 
 		// before beat
@@ -192,10 +202,23 @@ var	BAR = 0,
 		} else if ((!next || next.type != NOTE)
 			&& s.prev && s.prev.type == NOTE) {
 			d = s.prev.dur / 2
+
+		// on beat
 		} else {
 
-			// after beat
-			after = true
+			// keep the sound elements in time order
+			next.ts_prev.ts_next = next.ts_next;
+			next.ts_next.ts_prev = next.ts_prev;
+			for (s2 = next.ts_next; s2; s2 = s2.ts_next) {
+				if (s2.time != next.time) {
+					next.ts_next = s2
+					next.ts_prev = s2.ts_prev;
+					next.ts_prev.ts_next = next;
+					s2.ts_prev = next
+					break
+				}
+			}
+
 			if (!next.dots)
 				d = next.dur / 2
 			else if (next.dots == 1)
@@ -228,7 +251,7 @@ var	BAR = 0,
 			a_e.push([
 				s.istart,
 				t,
-				s.p_v.instr,
+				instr[s.v],
 				pit2mid(s, i),
 				note.ti1 ? do_tie(s, note, d) : d])
 		}
@@ -268,7 +291,7 @@ var	BAR = 0,
 			abc_time = s.time
 		}
 
-		map = vmap[s.v]
+		map = cmaps[s.v]
 		switch (s.type) {
 		case BAR:
 //fixme: does not work if different measures per voice
@@ -276,24 +299,22 @@ var	BAR = 0,
 				break
 
 			// right repeat
-			if (s.bar_type[0] == ':'
-			 && s != rep_nx_s) {		// (already done)
+			if (s.bar_type[0] == ':') {
+				s.bar_type = '|' +
+					 s.bar_type.slice(1); // don't repeat again
 				rep_nx_s = s		// repeat next
 				if (!rep_en_s)		// if no "|1"
 					rep_en_s = s	// repeat end
 				if (rep_st_s) {		// if left repeat
 					s = rep_st_s
 					for (v = 0; v < voice_tb.length; v++) {
-						for (i = 0; i < 70; i++)
-							vmap[v][i] = rep_st_map[v][i];
+						cmaps[v].set(rep_st_map[v]);
 						transp[v] = rep_st_transp[v]
 					}
 					play_factor = rep_st_fac;
 				} else {			// back to start
 					s = start;
 					set_voices();
-					for (v = 0; v < voice_tb.length; v++)
-						bar_map(v)
 				}
 				abc_time = s.time
 				break
@@ -301,7 +322,7 @@ var	BAR = 0,
 
 			if (!s.invis) {
 				for (v = 0; v < voice_tb.length; v++)
-					bar_map(v)
+					cmaps[v].set(kmaps[v])
 			}
 
 			// left repeat
@@ -314,8 +335,7 @@ var	BAR = 0,
 					if (!rep_st_map[v])
 						rep_st_map[v] =
 							new Float32Array(70)
-					for (i = 0; i < 70; i++)
-						rep_st_map[v][i] = vmap[v][i];
+					rep_st_map[v].set(cmaps[v]);
 					if (!rep_st_transp)
 						rep_st_transp = []
 					rep_st_transp[v] = transp[v]
@@ -369,7 +389,7 @@ var	BAR = 0,
 		s = s.ts_next
 	}
     } // add()
-
+  } // return
 } // ToAudio
 
 // nodejs

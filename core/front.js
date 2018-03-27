@@ -1,6 +1,6 @@
 // abc2svg - front.js - ABC parsing front-end
 //
-// Copyright (C) 2014-2017 Jean-Francois Moine
+// Copyright (C) 2014-2018 Jean-Francois Moine
 //
 // This file is part of abc2svg-core.
 //
@@ -17,7 +17,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with abc2svg-core.  If not, see <http://www.gnu.org/licenses/>.
 
-/* translation table from the ABC draft version 2 */
+// translation table from the ABC draft version 2.2
 var abc_utf = {
 	"=D": "Đ",
 	"=H": "Ħ",
@@ -49,6 +49,15 @@ var abc_utf = {
 	"th": "þ"
 }
 
+// accidentals as octal values (abcm2ps compatibility)
+var oct_acc = {
+	"1": "\u266f",
+	"2": "\u266d",
+	"3": "\u266e",
+	"4": "&#x1d12a;",
+	"5": "&#x1d12b;"
+}
+
 // convert the escape sequences to utf-8
 function cnv_escape(src) {
 	var	c, c2,
@@ -66,44 +75,18 @@ function cnv_escape(src) {
 		switch (c) {
 		case '0':
 		case '2':
-			if (src[i + 1] == '0') {
-				switch (src[i + 2]) {	// compatibility
-				case '1':
-					dst += "\u266f";
-					j = i + 3
-					continue
-				case '2':
-					dst += "\u266d";
-					j = i + 3
-					continue
-				case '3':
-					dst += "\u266e";
-					j = i + 3
-					continue
-				case '4':
-					dst += "&#x1d12a;";
-					j = i + 3
-					continue
-				case '5':
-					dst += "&#x1d12b;";
-					j = i + 3
-					continue
-				}
-			}
-				// fall thru
-		case '1':
-		case '3':
-			if (src[i + 1] >= '0' && src[i + 1] <= '7'
-			 && src[i + 2] >= '0' && src[i + 2] <= '7') {
-				j = parseInt(src.slice(i, i + 3), 8);
-				dst += String.fromCharCode(j);
+			if (src[i + 1] != '0')
+				break
+			c2 = oct_acc[src[i + 2]]
+			if (c2) {
+				dst += c2;
 				j = i + 3
 				continue
 			}
 			break
 		case 'u':
 			j = Number("0x" + src.slice(i + 1, i + 5));
-			if (isNaN(j)) {
+			if (isNaN(j) || j < 0x20) {
 				dst += src[++i] + "\u0306"	// breve
 				j = i + 1
 				continue
@@ -120,7 +103,7 @@ function cnv_escape(src) {
 			}
 			dst += String.fromCharCode.apply(null, codeUnits)
 			continue
-		case 't':
+		case 't':			// TAB
 			dst += ' ';
 			j = i + 1
 			continue
@@ -170,8 +153,8 @@ function cnv_escape(src) {
 				dst += src[++i] + "\u030a"	// ring
 				j = i + 1
 				continue
-			case ':':
-				dst += src[++i] + "\u030b"	// double acute
+			case 'H':
+				dst += src[++i] + "\u030b"	// hungarumlaut
 				j = i + 1
 				continue
 			case 'v':
@@ -220,7 +203,7 @@ function do_include(fn) {
 		return
 	}
 	if (fn.slice(-3) == '.js') {
-		eval(file)
+		js_inject(file)
 	} else {
 		parse_sav = clone(parse);
 		tosvg(fn, file);
@@ -234,16 +217,16 @@ var	err_ign_s = "$1: inside tune - ignored",
 
 // parse ABC code
 function tosvg(in_fname,		// file name
-		file) {			// file content
+		file,			// file content
+		bol, eof) {		// beginning/end of file
 	var	i, c, bol, eol, end,
-		ext, select, skip,
+		ext, select,
 		line0, line1,
 		last_info, opt, text, a, b, s,
 		cfmt_sav, info_sav, char_tb_sav, glovar_sav, maps_sav,
 		mac_sav, maci_sav,
 		pscom,
-		txt_add = '\n',		// for "+:"
-		eof = file.length
+		txt_add = '\n'		// for "+:"
 
 	// check if a tune is selected
 	function tune_selected() {
@@ -269,38 +252,13 @@ function tosvg(in_fname,		// file name
 
 	// remove the comment at end of text
 	function uncomment(src, do_escape) {
-		var i, j, c, l
-
+		if (src.indexOf('%') >= 0)
+			src = src.replace(/(.*[^\\])%.*/, '$1')
+				 .replace(/\\%/g, '%');
+		src = src.trim()
 		if (do_escape && src.indexOf('\\') >= 0)
-			src = cnv_escape(src);
-		l = src.length
-		for (i = 0; i < l; i++) {
-			c = src[i]
-			switch (c) {
-			case '\\':
-				i++
-				continue
-			case '%':
-				return src.slice(0, i).replace(/\s+$/, '')
-			case '"':
-				break
-			default:
-				continue
-			}
-			j = i + 1
-			for (;;) {			// in ".." sequence
-				j = src.indexOf('"', j)
-				if (j < 0)
-					break		// fixme: no string end
-				if (src[j - 1] != '\\')
-					break
-			}
-			if (j < 0)
-				break
-			i = j
-		}
-		src = src.replace(/\s+$/, '');		// trimRight
-		return src.replace(/\\%/g,'%')
+			return cnv_escape(src)
+		return src
 	} // uncomment()
 
 	function end_tune() {
@@ -308,11 +266,9 @@ function tosvg(in_fname,		// file name
 		if (info.W)
 			put_words(info.W);
 		put_history();
-		blk_out();
 		blk_flush();
 		parse.state = 0;		// file header
 		cfmt = cfmt_sav;
-		set_posx();
 		info = info_sav;
 		char_tb = char_tb_sav;
 		glovar = glovar_sav;
@@ -320,6 +276,8 @@ function tosvg(in_fname,		// file name
 		mac = mac_sav;
 		maci = maci_sav;
 		init_tune()
+		img.chg = true;
+		set_page();
 	} // end_tune()
 
 	// initialize
@@ -329,10 +287,13 @@ function tosvg(in_fname,		// file name
 	}
 
 	// scan the file
-	bol = 0
-	for (bol = 0; bol < eof; bol = parse.eol + 1) {
+	if (bol == undefined)
+		bol = 0
+	if (!eof)
+		eof = file.length
+	for ( ; bol < eof; bol = parse.eol + 1) {
 		eol = file.indexOf('\n', bol)	// get a line
-		if (eol < 0)
+		if (eol < 0 || eol > eof)
 			eol = eof;
 		parse.eol = eol
 
@@ -347,17 +308,19 @@ function tosvg(in_fname,		// file name
 			break
 		}
 		eol++
-		if (skip) {			// tune skip
-			if (eol != bol)
-				continue
-			skip = false
-		}
 		if (eol == bol) {		// empty line
 			if (parse.state == 1) {
 				parse.istart = bol;
 				syntax(1, "Empty line in tune header - ignored")
-			} else if (parse.state >= 2)
+			} else if (parse.state >= 2) {
 				end_tune()
+				if (parse.select) {	// skip to next tune
+					eol = file.indexOf('\nX:', parse.eol)
+					if (eol < 0)
+						eol = eof
+					parse.eol = eol
+				}
+			}
 			continue
 		}
 		parse.istart = parse.bol = bol;
@@ -424,18 +387,17 @@ function tosvg(in_fname,		// file name
 			}
 
 			// beginxxx/endxxx
-			b = a[0].match(/begin(.*)/)
-			if (b) {
-//fixme: ignore "I:beginxxx" ... ?
-				end = '\n' + line0 + line1 + "end" + b[1];
+			if (a[0].slice(0, 5) == 'begin') {
+				b = a[0].substr(5);
+				end = '\n' + line0 + line1 + "end" + b;
 				i = file.indexOf(end, eol)
 				if (i < 0) {
 					syntax(1, "No $1 after %%$2",
-							end.slice(1), b[0]);
+							end.slice(1), a[0]);
 					parse.eol = eof
 					continue
 				}
-				do_begin_end(b[1], a[1],
+				do_begin_end(b, a[1],
 					file.slice(eol + 1, i).replace(
 						new RegExp('^' + line0 + line1, 'gm'),
 										''));
@@ -450,10 +412,13 @@ function tosvg(in_fname,		// file name
 					syntax(1, "%%select ignored")
 					continue
 				}
-				select = uncomment(text.slice(7).trim(),
-							false)
+				select = uncomment(text.slice(7), false)
 				if (select[0] == '"')
 					select = select.slice(1, -1);
+				if (!select) {
+					delete parse.select
+					continue
+				}
 				select = select.replace(/\(/g, '\\(');
 				select = select.replace(/\)/g, '\\)');
 //				select = select.replace(/\|/g, '\\|');
@@ -467,7 +432,7 @@ function tosvg(in_fname,		// file name
 					syntax(1, "%%voice ignored")
 					continue
 				}
-				select = uncomment(text.slice(6).trim(), false)
+				select = uncomment(text.slice(6), false)
 
 				/* if void %%voice, free all voice options */
 				if (!select) {
@@ -508,7 +473,7 @@ function tosvg(in_fname,		// file name
 					switch (a[0]) {
 					default:
 						opt[select].push(
-							uncomment(text.trim(), true))
+							uncomment(text, true))
 						continue
 					case "score":
 					case "staves":
@@ -522,7 +487,7 @@ function tosvg(in_fname,		// file name
 				parse.eol = bol - 1
 				continue
 			}
-			do_pscom(uncomment(text.trim(), true))
+			do_pscom(uncomment(text, true))
 			continue
 		}
 
@@ -537,8 +502,7 @@ function tosvg(in_fname,		// file name
 		}
 
 		// information fields
-		text = uncomment(file.slice(bol + 2, eol).trim(),
-				 true)
+		text = uncomment(file.slice(bol + 2, eol), true)
 		if (line0 == '+') {
 			if (!last_info) {
 				syntax(1, "+: without previous info field")
@@ -555,8 +519,11 @@ function tosvg(in_fname,		// file name
 				continue
 			}
 			if (parse.select
-			 && !tune_selected()) {
-				skip = true
+			 && !tune_selected()) {	// skip to the next tune
+				eol = file.indexOf('\nX:', parse.eol)
+				if (eol < 0)
+					eol = eof;
+				parse.eol = eol
 				continue
 			}
 
@@ -680,7 +647,6 @@ function tosvg(in_fname,		// file name
 		return
 	if (parse.state >= 2)
 		end_tune();
-	blk_flush();
 	parse.state = 0
 }
 Abc.prototype.tosvg = tosvg

@@ -1,6 +1,6 @@
 // abc2svg - abc2svg.js
 //
-// Copyright (C) 2014-2017 Jean-Francois Moine
+// Copyright (C) 2014-2018 Jean-Francois Moine
 //
 // This file is part of abc2svg-core.
 //
@@ -19,7 +19,14 @@
 
 // start of the Abc object
 function Abc(user) {
-"use strict"
+	"use strict";
+
+	// mask some unsafe functions
+    var	require = empty_function,
+	system = empty_function,
+	write = empty_function,
+	XMLHttpRequest = empty_function;
+
 	this.user = user
 
 // -- constants --
@@ -43,7 +50,7 @@ var	BAR = 0,
 	BLOCK = 16,
 	REMARK = 17,
 
-// accidentals
+// note heads
 	FULL = 0,
 	EMPTY = 1,
 	OVAL = 2,
@@ -73,12 +80,9 @@ var	BAR = 0,
 	MASTER_VOICE = 0x1000,
 
 	BASE_LEN = 1536,
-//	CM = 28.346,		// 1 inch = 2.54 centimeter
-//	IN = 72,
-// factor / 0.75
 	IN = 96,		// resolution 96 PPI
 	CM = 37.8,		// 1 inch = 2.54 centimeter
-	YSTEP = 128		/* number of steps for y offsets */
+	YSTEP = 256		/* number of steps for y offsets */
 
 var	glovar = {
 		meter: {
@@ -100,7 +104,6 @@ var	glovar = {
 
 // utilities
 function clone(obj) {
-//	if (!obj || typeof(obj) != 'object')
 	if (!obj)
 		return obj
 	var tmp = new obj.constructor()
@@ -200,4 +203,12 @@ function syntax(sev, msg, a1, a2, a3, a4) {
 	}
 
 	error(sev, s, msg, a1, a2, a3, a4)
+}
+
+// inject javascript code
+function js_inject(js) {
+	if (!js.match(/eval *\(|Function|setTimeout|setInterval/))
+		eval('"use strict"\n' + js)
+	else
+		syntax(1, "Unsecure code")
 }
