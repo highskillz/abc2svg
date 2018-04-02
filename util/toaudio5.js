@@ -68,7 +68,6 @@ function Audio5(i_conf) {
 		ac,			// audio context
 		gain,			// global gain
 		gain_val = 0.7,
-		timout,			// timer while playing
 		follow = true,		// follow the music
 		speed = 1,		// speed factor
 		new_speed,
@@ -127,28 +126,23 @@ function Audio5(i_conf) {
 		return a
 	}
 
-	// get the URL and the type of the soundfont from cookies
-	function get_cookies() {
-	    var	ac = document.cookie.split(';')
-		for (var i = 0; i < ac.length; i++) {
-			var c = ac[i].split('=')
-			switch (c[0].replace(/ */, '')) {
-			case "follow":
-				follow = c[1] == "true"
-				break
-			case "sfu":
-				if (!sfu)
-					sfu = c[1]
-				break
-//			case "speed":
-//			    var	v = Math.pow(3, (c[1] - 10) * .1);
-//				speed = v
-//				break
-			case "volume":
-				vol = Number(c[1])
-				break
-			}
+	// get the play parameters from localStorage
+	function get_param() {
+		try {
+			if (!localStorage)
+				return
+		} catch(e) {
+			return
 		}
+	    var	v = localStorage.getItem("follow")
+		if (v)
+			follow = v != "0";
+		v = localStorage.getItem("sfu")
+		if (v)
+			sfu = v;
+		v = localStorage.getItem("volume")
+		if (v)
+			gain_val = Number(v)
 	}
 
 	// copy a sf2 sample to an audio buffer
@@ -159,7 +153,7 @@ function Audio5(i_conf) {
 		a = b.getChannelData(0)		// destination = array of float32
 
 		for (i = 0; i < s.length; i++)
-			a[i] = s[i] / 131072	// volume divided by 4
+			a[i] = s[i] / 196608	// volume divided by 6
 	}
 
 	// create all notes of an instrument
@@ -170,6 +164,8 @@ function Audio5(i_conf) {
 		rates[instr] = []
 		for (i = 0; i < infos.length; i++) {
 			gen = infos[i].generator;
+			if (!gen.sampleID)	// (empty generator!)
+				continue
 			sid = gen.sampleID.amount;
 			sampleRate = parser.sampleHeader[sid].sampleRate;
 			sample = parser.sample[sid];
@@ -350,7 +346,7 @@ function Audio5(i_conf) {
 		}
 
 		// delay before next sound generation
-		timout = setTimeout(play_next, (t + stime - ac.currentTime)
+		setTimeout(play_next, (t + stime - ac.currentTime)
 				* 1000 - 300,	// wake before end of playing
 				a_e)
 	} // play_next()
@@ -362,7 +358,7 @@ function Audio5(i_conf) {
 
 		// wait for instruments
 		if (w_instr != 0) {
-			timout = setTimeout(play_start, 300, a_e)
+			setTimeout(play_start, 300, a_e)
 			return
 		}
 
@@ -373,18 +369,11 @@ function Audio5(i_conf) {
 		play_next(a_e)
 	} // play_start()
 
-	function set_cookie(n, v) {
-	    var	d = new Date();
-		d.setTime(d.getTime() + 31536000000)	// one year
-//					365 * 24 * 60 * 60 * 1000
-		document.cookie = n + "=" + v + ";expires=" + d.toUTCString()
-	}
-
 // Audio5 object creation
 
 	init_b64d();			// initialize base64 decoding
 
-	get_cookies()			// get the user parameters
+	get_param()			// get the play parameters
 
 	if (!sfu)
 		sfu = "Scc1t2"		// set the default soundfont location
@@ -429,7 +418,6 @@ function Audio5(i_conf) {
 
 	// stop playing
 	stop: function() {
-		clearTimeout(timout);
 		iend = 0
 		if (gain) {
 			gain.disconnect();
@@ -442,7 +430,6 @@ function Audio5(i_conf) {
 		if (v == undefined)
 			return follow
 		follow = v;
-		set_cookie("follow", v)
 	}, // set_follow()
 
 	// set soundfont URL
@@ -450,7 +437,6 @@ function Audio5(i_conf) {
 		if (v == undefined)
 			return sfu
 		sfu = v;
-		set_cookie("sfu", v)
 	}, // set_sfu()
 
 	// set speed (< 1 slower, > 1 faster)
@@ -471,7 +457,6 @@ function Audio5(i_conf) {
 			gain.gain.value = v
 		else
 			gain_val = v;
-		set_cookie("volume", v.toFixed(2))
 	} // set_vol()
     }
 } // end Audio5

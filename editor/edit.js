@@ -104,6 +104,27 @@ var user = {
 
 // -- local functions
 
+// Storage handling
+function storage(t,		// session or local
+		 k, v) {
+	try {
+		t = t ? localStorage : sessionStorage
+		if (!t)
+			return
+	} catch(e) {
+		return
+	}
+	try {
+		if (v)
+			t.setItem(k, v)
+		else if (v === 0)
+			t.removeItem(k)
+		else
+			return t.getItem(k)
+	} catch(e) {
+	}
+}
+
 // replace <>& by XML character references
 function clean_txt(txt) {
 	return txt.replace(/<|>|&.*?;|&/g, function(c) {
@@ -139,7 +160,7 @@ function loadlang(lang, no_memo) {
 	loadjs('edit-' + lang + '.js', function() { loadtxt() });
 	loadjs('err-' + lang + '.js')
 	if (!no_memo)
-		set_cookie("lang", lang)
+		storage(true, "lang", lang == "en" ? 0 : lang)
 }
 
 // show/hide a popup message
@@ -484,29 +505,24 @@ function destroyClickedElement(evt) {
 	document.body.removeChild(evt.target)
 }
 
-// cookies stuff
-function set_cookie(n, v) {
-    var	d = new Date();
-	d.setTime(d.getTime() + 30 * 24 * 60 * 60 * 1000);	// one month
-	document.cookie = n + "=" + v + ";expires=" + d.toUTCString()
-}
-
 // set the size of the font of the textarea
 function setfont() {
     var	fs = document.getElementById("fontsize").value.toString();
 	document.getElementById("source").style.fontSize =
 		document.getElementById("src1").style.fontSize = fs + "px";
-	set_cookie("font", fs)
+	storage(true, "fontsz", fs == "14" ? 0 : fs)
 }
 
 // playing
 // set 'follow music'
 function set_follow(e) {
 	abcplay.set_follow(e.checked)
+	storage(true, "follow", e.checked == "1" ? 0 : "0")
 }
 // set soundfont URL
 function set_sfu(v) {
 	abcplay.set_sfu(v)
+	storage(true, "sfu", v == "Scc1t2" ? 0 : v)
 }
 // set_speed value = 1..20, 10 = no change
 function set_speed(iv) {
@@ -518,7 +534,10 @@ function set_speed(iv) {
 }
 // set volume
 function set_vol(v) {
+    var	gvl = document.getElementById("gvl");
+	gvl.innerHTML = v.toFixed(2);
 	abcplay.set_vol(v)
+	storage(true, "volume", v == 0.7 ? 0 : v.toFixed(2))
 }
 //fixme: do tune/start-stop selection of what to play
 function notehlight(i, on) {
@@ -553,7 +572,6 @@ function play_tune() {
 
 	if (playing) {
 		abcplay.stop();
-		endplay()
 		return
 	}
 	playing = true;
@@ -596,22 +614,17 @@ function edit_init() {
 	}
 
 	function set_pref() {
-	    var	ac = document.cookie.split(';')
-		for (var i = 0; i < ac.length; i++) {
-			var c = ac[i].split('=')
-			switch (c[0].replace(/ */, '')) {
-			case "font":
-				document.getElementById("source").style.fontSize =
-					document.getElementById("src1").style.fontSize =
-						c[1] + "px";
-				document.getElementById("fontsize").value =
-						Number(c[1])
-				break
-			case "lang":
-				loadlang(c[1], true)
-				break
-			}
+	    var	v = storage(true, "fontsz")
+		if (v) {
+			document.getElementById("source").style.fontSize =
+				document.getElementById("src1").style.fontSize =
+					v + "px";
+			document.getElementById("fontsize").value =
+					Number(v)
 		}
+		v = storage(true, "lang")
+		if (v)
+			loadlang(v, true)
 	}
 
 	document.getElementById("abc2svg").innerHTML =
@@ -656,7 +669,9 @@ function edit_init() {
 //			document.getElementById("spv").innerHTML =
 //				Math.log(abcplay.set_speed()) / Math.log(3);
 			document.getElementById("gvol").setAttribute("value",
-				(abcplay.set_vol() * 10) | 0)
+				abcplay.set_vol() * 10)
+			document.getElementById("gvl").setAttribute("value",
+				(abcplay.set_vol() * 10).toFixed(2))
 		});
 
 		user.get_abcmodel =
@@ -664,9 +679,8 @@ function edit_init() {
 				if (playing)
 					abcplay.add(tsfirst, voice_tb)
 			}
-	} else {
-		set_pref()	// set the preferences from the cookies
 	}
+	set_pref()	// set the preferences from local storage
 }
 
 // drag and drop

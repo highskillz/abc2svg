@@ -501,163 +501,12 @@ function new_syst(init) {
 	par_sy = sy_new
 }
 
-/* go to a global (measure + time) */
-function go_global_time(s, symsel) {
-	var s2, bar_time, seq
-
-	if (symsel.bar <= 1) {		/* special case: there is no measure 0/1 */
-		if (symsel.bar == 1) {
-			for (s2 = s; s2; s2 = s2.ts_next) {
-				if (s2.type == BAR
-				 && s2.time != 0)
-					break
-			}
-			if (s2.time < voice_tb[cur_sy.top_voice].meter.wmeasure)
-				s = s2
-		}
-	} else {
-		for ( ; s; s = s.ts_next) {
-			if (s.type == BAR
-			 && s.bar_num >= symsel.bar)
-				break
-		}
-		if (!s)
-			return // null
-		if (symsel.seq != 0) {
-			seq = symsel.seq
-			for (s = s.ts_next; s; s = s.ts_next) {
-				if (s.type == BAR
-				 && s.bar_num == symsel.bar) {
-					if (--seq == 0)
-						break
-				}
-			}
-			if (!s)
-				return // null
-		}
-	}
-
-	if (symsel.time == 0)
-		return s;
-	bar_time = s.time + symsel.time
-	while (s.time < bar_time) {
-		s = s.ts_next
-		if (!s)
-			return s
-	}
-	do {
-		s = s.ts_prev		/* go back to the previous sequence */
-	} while (!s.seqst)
-	return s
-}
-
-/* treat %%clip */
-function do_clip() {
-	var s, s2, sy, p_voice, v
-
-	/* remove the beginning of the tune */
-	s = tsfirst
-	if (clip_start.bar > 0
-	 || clip_start.time > 0) {
-		s = go_global_time(s, clip_start)
-		if (!s) {
-			tsfirst = null
-			return
-		}
-
-		/* update the start of voices */
-		sy = cur_sy
-		for (s2 = tsfirst; s2 != s; s2 = s2.ts_next) {
-			switch (s2.type) {
-			case CLEF:
-				s2.p_v.clef = s2
-				break
-			case KEY:
-				s2.p_v.key = clone(s2.as.u.key)
-				break
-			case METER:
-				s2.p_v.meter = clone(s2.as.u.meter)
-				break
-			case STAVES:
-				sy = s.sy
-				break
-			}
-		}
-		cur_sy = sy
-		for (v = 0; v < voice_tb.length; v++) {
-			p_voice = voice_tb[v]
-			for (s2 = s; s2; s2 = s2.ts_next) {
-				if (s2.v == v) {
-					delete s2.prev
-					break
-				}
-			}
-			p_voice.sym = s2
-		}
-		tsfirst = s
-		delete s.ts_prev
-	}
-
-	/* remove the end of the tune */
-	s = go_global_time(s, clip_end)
-	if (!s)
-		return
-
-	/* keep the current sequence */
-	do {
-		s = s.ts_next
-		if (!s)
-			return
-	} while (!s.seqst)
-
-	/* cut the voices */
-	for (v = 0; v < voice_tb.length; v++) {
-		p_voice = voice_tb[v]
-		for (s2 = s.ts_prev; s2; s2 = s2.ts_prev) {
-			if (s2.v == v) {
-				delete s2.next
-				break
-			}
-		}
-		if (!s2)
-			p_voice.sym = null
-	}
-	delete s.ts_prev.ts_next
-}
-
-/* -- set the bar numbers and treat %%clip / %%break -- */
+/* -- set the bar numbers -- */
 function set_bar_num() {
 	var	s, s2, tim, bar_time, bar_num, rep_dtime,
 		v = cur_sy.top_voice,
 		wmeasure = voice_tb[v].meter.wmeasure,
 		bar_rep = gene.nbar
-
-	// insert the EOL of %%break
-	function do_break() {
-		var s, i, m, n, d, t
-
-		for (i = 0; i < glovar.break.length; i++) {
-			m = glovar.break[i].m
-			n = glovar.break[i].n
-			d = glovar.break[i].d
-			for (s = voice_tb[v].sym; s; s = s.next) {
-				if (s.type == BAR && s.bar_num == m)
-					break
-			}
-			if (!s)
-				continue
-			if (n != 0) {
-				t = s.time + n / d
-				for ( ; s; s = s.next) {
-					if (s.time > t)
-						break
-				}
-				if (!s)
-					continue
-			}
-			s.eoln = true
-		}
-	} // do_break
 
 	/* don't count a bar at start of line */
 	for (s = tsfirst; ; s = s.ts_next) {
@@ -734,7 +583,7 @@ function set_bar_num() {
 			if (s2 && s2.type == BAR && s2.text) {
 				if (s2.text[0] == '1') {
 					rep_dtime = 0;
-					bar_rep = bar_num - 1
+					bar_rep = bar_num
 				} else {			// restart bar numbering
 					if (!cfmt.contbarnb)
 						bar_num = bar_rep
@@ -749,45 +598,8 @@ function set_bar_num() {
 			break
 		}
 	}
-//fixme
-	/* do the %%clip stuff */
-	/* do the %%break stuff */
-	if (glovar.break)
-		do_break()
-
 	if (cfmt.measurenb < 0)		/* if no display of measure bar */
 		gene.nbar = bar_num	/* update in case of more music to come */
-}
-
-// %%break measure_nb [":" num "/" den] [" " measure ...]*
-function get_break(param) {
-	var a = param.split(' '), b, c, d, i, j, k, n
-
-	glovar.break = []
-	for (k in a) {
-		if (!a.hasOwnProperty(k))
-			continue
-		b = a[k];
-		i = b.indexOf(':')
-		if (i < 0) {
-			glovar.break.push({m: b, n: 0, d: 1})
-			continue
-		}
-		j = b.indexOf('/')
-		if (j < 0) {
-			syntax(1, "'/' missing in %%break")
-			break
-		}
-		d = parseInt(b.slice(j + 1))
-		if (isNaN(d) || d <= 1) {
-			syntax(1, "Bad denominator in %%break")
-			break
-		}
-		glovar.break.push({
-			m: b.slice(0, i - 1),
-			n: b.slice(i + 1, j - 1),
-			d: d})
-	}
 }
 
 // note mapping
@@ -966,9 +778,6 @@ function do_pscom(text) {
 	cmd = cmd[0];
 	param = text.replace(cmd, '').trim()
 	switch (cmd) {
-	case "break":
-		get_break(param)
-		return
 	case "center":
 		if (parse.state >= 2) {
 			s = new_block("text");
@@ -986,9 +795,6 @@ function do_pscom(text) {
 			if (s)
 				get_clef(s)
 		}
-		return
-	case "clip":
-//fixme: to do
 		return
 	case "deco":
 		deco_add(param)
